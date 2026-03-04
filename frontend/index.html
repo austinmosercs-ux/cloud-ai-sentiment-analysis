@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Sentiment Analysis</title>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8;
+      color: #2d3748;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────── */
+    .container { width: 100%; max-width: 720px; }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    header h1 { font-size: 1.8rem; font-weight: 700; color: #1a202c; }
+    header p  { color: #718096; margin-top: .4rem; font-size: .95rem; }
+
+    /* ── Cards ────────────────────────────────────────────────── */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #4a5568; }
+
+    /* ── Form ─────────────────────────────────────────────────── */
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      padding: .75rem 1rem;
+      font-size: .95rem;
+      resize: vertical;
+      transition: border-color .2s;
+      font-family: inherit;
+    }
+    textarea:focus { outline: none; border-color: #4299e1; }
+
+    .char-count { font-size: .78rem; color: #a0aec0; text-align: right; margin-top: .3rem; }
+
+    button {
+      margin-top: 1rem;
+      width: 100%;
+      padding: .75rem;
+      background: #2b6cb0;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, opacity .2s;
+    }
+    button:hover:not(:disabled) { background: #3182ce; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* ── Result ───────────────────────────────────────────────── */
+    #result { display: none; }
+
+    .sentiment-badge {
+      display: inline-block;
+      padding: .35rem .9rem;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: .03em;
+    }
+    .badge-POSITIVE { background: #c6f6d5; color: #276749; }
+    .badge-NEGATIVE { background: #fed7d7; color: #9b2c2c; }
+    .badge-NEUTRAL  { background: #e2e8f0; color: #4a5568; }
+    .badge-MIXED    { background: #fefcbf; color: #744210; }
+
+    /* ── Score bars ───────────────────────────────────────────── */
+    .scores { margin-top: 1.2rem; display: flex; flex-direction: column; gap: .6rem; }
+
+    .score-row { display: flex; align-items: center; gap: .75rem; }
+    .score-label { width: 72px; font-size: .82rem; font-weight: 600; color: #4a5568; text-transform: capitalize; }
+    .bar-bg {
+      flex: 1;
+      height: 10px;
+      background: #edf2f7;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width .5s ease;
+    }
+    .bar-POSITIVE { background: #48bb78; }
+    .bar-NEGATIVE { background: #fc8181; }
+    .bar-NEUTRAL  { background: #90cdf4; }
+    .bar-MIXED    { background: #f6ad55; }
+    .score-pct { width: 44px; text-align: right; font-size: .82rem; color: #718096; }
+
+    /* ── History table ────────────────────────────────────────── */
+    #history { display: none; }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: .75rem;
+    }
+    .history-header h2 { margin: 0; }
+
+    #refreshBtn {
+      width: auto;
+      margin: 0;
+      padding: .4rem .9rem;
+      font-size: .82rem;
+      background: #edf2f7;
+      color: #4a5568;
+      border-radius: 6px;
+    }
+    #refreshBtn:hover { background: #e2e8f0; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    thead tr { border-bottom: 2px solid #edf2f7; }
+    th { padding: .5rem .6rem; text-align: left; color: #718096; font-weight: 600; }
+    td { padding: .55rem .6rem; border-bottom: 1px solid #f7fafc; }
+    tr:last-child td { border-bottom: none; }
+    .review-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Spinner ──────────────────────────────────────────────── */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 3px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: .5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ────────────────────────────────────────────────── */
+    .error-msg { color: #e53e3e; font-size: .9rem; margin-top: .75rem; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <h1>AI Sentiment Analysis</h1>
+    <p>Powered by Amazon Comprehend &amp; AWS Lambda</p>
+  </header>
+
+  <!-- ── Analyze Card ──────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Analyze a Review</h2>
+    <textarea id="reviewText"
+      placeholder="Paste a customer review here…"
+      maxlength="5000"
+      oninput="updateCharCount()"></textarea>
+    <div class="char-count"><span id="charCount">0</span> / 5000</div>
+    <div id="errorMsg" class="error-msg"></div>
+    <button id="analyzeBtn" onclick="analyzeReview()">Analyze Sentiment</button>
+  </div>
+
+  <!-- ── Result Card ───────────────────────────────────────────── -->
+  <div class="card" id="result">
+    <h2>Result</h2>
+    <div>
+      <strong>Overall Sentiment: </strong>
+      <span class="sentiment-badge" id="sentimentBadge"></span>
+    </div>
+    <div class="scores" id="scoresContainer"></div>
+  </div>
+
+  <!-- ── History Card ─────────────────────────────────────────── -->
+  <div class="card" id="history">
+    <div class="history-header">
+      <h2>Recent Reviews</h2>
+      <button id="refreshBtn" onclick="loadHistory()">Refresh</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Review</th>
+          <th>Sentiment</th>
+          <th>Confidence</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script type="module">
+  // ── CONFIG ──────────────────────────────────────────────────────
+  // Replace this with your actual API Gateway URL after deployment.
+  const API_BASE = "https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com";
+
+  // ── Char counter ────────────────────────────────────────────────
+  function updateCharCount() {
+    const text = document.getElementById("reviewText").value;
+    document.getElementById("charCount").textContent = text.length;
+  }
+
+  // ── Analyze ─────────────────────────────────────────────────────
+  async function analyzeReview() {
+    const reviewText = document.getElementById("reviewText").value.trim();
+    const errorMsg   = document.getElementById("errorMsg");
+    const btn        = document.getElementById("analyzeBtn");
+
+    errorMsg.textContent = "";
+
+    if (!reviewText) {
+      errorMsg.textContent = "Please enter a review before analyzing.";
+      return;
+    }
+
+    // Loading state
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Analyzing…';
+
+    try {
+      const res = await fetch(`${API_BASE}/analyze`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ review: reviewText }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      showResult(data);
+      loadHistory();   // refresh history after new analysis
+
+    } catch (err) {
+      errorMsg.textContent = `Error: ${err.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Analyze Sentiment";
+    }
+  }
+
+  // ── Render result ────────────────────────────────────────────────
+  function showResult(data) {
+    const resultCard = document.getElementById("result");
+    const badge      = document.getElementById("sentimentBadge");
+    const scores     = document.getElementById("scoresContainer");
+
+    badge.textContent  = data.sentiment;
+    badge.className    = `sentiment-badge badge-${data.sentiment}`;
+
+    const scoreOrder = ["positive", "negative", "neutral", "mixed"];
+    scores.innerHTML = scoreOrder.map(key => {
+      const pct  = (data.scores[key] * 100).toFixed(1);
+      const UPPER = key.toUpperCase();
+      return `
+        <div class="score-row">
+          <span class="score-label">${key}</span>
+          <div class="bar-bg">
+            <div class="bar-fill bar-${UPPER}" style="width:${pct}%"></div>
+          </div>
+          <span class="score-pct">${pct}%</span>
+        </div>`;
+    }).join("");
+
+    resultCard.style.display = "block";
+    resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // ── History ──────────────────────────────────────────────────────
+  async function loadHistory() {
+    const historyCard = document.getElementById("history");
+    const tbody       = document.getElementById("historyBody");
+
+    try {
+      const res  = await fetch(`${API_BASE}/history`);
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      if (!data.reviews || data.reviews.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#a0aec0;padding:1rem">No reviews yet.</td></tr>`;
+      } else {
+        tbody.innerHTML = data.reviews.map(r => {
+          const time = new Date(r.timestamp).toLocaleString();
+          const conf = (topScore(r.scores) * 100).toFixed(0) + "%";
+          const truncated = r.reviewText.length > 60
+            ? r.reviewText.slice(0, 60) + "…"
+            : r.reviewText;
+          return `
+            <tr>
+              <td class="review-cell" title="${escapeHtml(r.reviewText)}">${escapeHtml(truncated)}</td>
+              <td><span class="sentiment-badge badge-${r.sentiment}" style="font-size:.75rem;padding:.2rem .6rem">${r.sentiment}</span></td>
+              <td>${conf}</td>
+              <td>${time}</td>
+            </tr>`;
+        }).join("");
+      }
+
+      historyCard.style.display = "block";
+
+    } catch (err) {
+      console.error("History load failed:", err.message);
+    }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────
+  function topScore(scores) {
+    return Math.max(scores.positive, scores.negative, scores.neutral, scores.mixed);
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  // Load history on page load
+  await loadHistory();
+</script>
+</body>
+</html>
