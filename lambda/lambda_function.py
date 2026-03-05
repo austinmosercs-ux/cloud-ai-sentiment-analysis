@@ -147,6 +147,14 @@ def handle_history():
 # Helper
 # ---------------------------------------------------------------------------
 
+class _DecimalEncoder(json.JSONEncoder):
+    """Convert Decimal values returned by DynamoDB into floats for JSON."""
+    def default(self, o):
+        if isinstance(o, Decimal):
+            return float(o)
+        return super().default(o)
+
+
 def response(status_code, body):
     """Build a properly formatted API Gateway HTTP response."""
     return {
@@ -158,5 +166,5 @@ def response(status_code, body):
             "Access-Control-Allow-Headers": "Content-Type",
             "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
         },
-        "body": json.dumps(body),
+        "body": json.dumps(body, cls=_DecimalEncoder),
     }
