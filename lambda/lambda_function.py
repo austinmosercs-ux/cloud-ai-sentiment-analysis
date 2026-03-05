@@ -10,6 +10,7 @@ import boto3
 import uuid
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from botocore.config import Config
 
 # Configure logging - visible in CloudWatch Logs
@@ -87,6 +88,14 @@ def handle_analyze(event):
     # Round scores to 4 decimal places for readability
     scores_rounded = {k: round(v, 4) for k, v in scores.items()}
 
+    # API response scores (plain floats for JSON serialization)
+    scores_response = {
+        "positive": scores_rounded["Positive"],
+        "negative": scores_rounded["Negative"],
+        "neutral":  scores_rounded["Neutral"],
+        "mixed":    scores_rounded["Mixed"],
+    }
+
     # Build the item to store
     review_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -96,12 +105,8 @@ def handle_analyze(event):
         "timestamp": timestamp,
         "reviewText": review_text,
         "sentiment": sentiment,
-        "scores": {
-            "positive": scores_rounded["Positive"],
-            "negative": scores_rounded["Negative"],
-            "neutral":  scores_rounded["Neutral"],
-            "mixed":    scores_rounded["Mixed"],
-        },
+        # DynamoDB resource client requires Decimal, not float
+        "scores": {k: Decimal(str(v)) for k, v in scores_response.items()},
     }
 
     # Store in DynamoDB
@@ -111,7 +116,7 @@ def handle_analyze(event):
     return response(200, {
         "reviewId":  review_id,
         "sentiment": sentiment,
-        "scores":    item["scores"],
+        "scores":    scores_response,
         "timestamp": timestamp,
     })
 
