@@ -170,11 +170,10 @@
     <h2>Analyze a Review</h2>
     <textarea id="reviewText"
       placeholder="Paste a customer review here…"
-      maxlength="5000"
-      oninput="updateCharCount()"></textarea>
+      maxlength="5000"></textarea>
     <div class="char-count"><span id="charCount">0</span> / 5000</div>
     <div id="errorMsg" class="error-msg"></div>
-    <button id="analyzeBtn" onclick="analyzeReview()">Analyze Sentiment</button>
+    <button id="analyzeBtn">Analyze Sentiment</button>
   </div>
 
   <!-- ── Result Card ───────────────────────────────────────────── -->
@@ -191,7 +190,7 @@
   <div class="card" id="history">
     <div class="history-header">
       <h2>Recent Reviews</h2>
-      <button id="refreshBtn" onclick="loadHistory()">Refresh</button>
+      <button id="refreshBtn">Refresh</button>
     </div>
     <table>
       <thead>
@@ -336,6 +335,11 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
   }
+
+  // ── Wire up event listeners ──────────────────────────────────────
+  document.getElementById("reviewText").addEventListener("input", updateCharCount);
+  document.getElementById("analyzeBtn").addEventListener("click", analyzeReview);
+  document.getElementById("refreshBtn").addEventListener("click", loadHistory);
 
   // Load history on page load
   await loadHistory();

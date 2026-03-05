@@ -211,7 +211,7 @@ curl -X POST https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/analyze \
   -d '{"review": "The shipping was late and the product was broken. Very disappointed."}'
 
 # Get history
-curl https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/history
+curl https://wqg809a91a.execute-api.us-east-1.amazonaws.com/history
 ```
 
 ---
