@@ -154,7 +154,7 @@ with your actual API Gateway Invoke URL.
       "Effect": "Allow",
       "Principal": "*",
       "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/*"
+      "Resource": "arn:aws:s3:::sentiment-analysis-frontend-austin-moser/*"
     }
   ]
 }
