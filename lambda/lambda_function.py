@@ -1,30 +1,46 @@
 """
 AI Sentiment Analysis - AWS Lambda Function
+
 Routes:
-  POST /analyze  - Analyze sentiment of a review using Amazon Comprehend
-  GET  /history  - Retrieve the 10 most recent reviews from DynamoDB
+  POST /analyze  - Accept a product URL, scrape reviews, analyze sentiment, store summary.
+  GET  /history  - Return the 10 most recently analyzed products.
 """
 
 import json
-import boto3
+import os
+import re
 import uuid
 import logging
+import urllib.parse
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
+
+import boto3
 from botocore.config import Config
 
-# Configure logging - visible in CloudWatch Logs
+# ---------------------------------------------------------------------------
+# Logging and AWS clients
+# ---------------------------------------------------------------------------
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Explicit timeouts satisfy SonarQube S7618 and prevent hanging Lambda executions
 _config = Config(connect_timeout=5, read_timeout=25)
 
-# AWS clients (initialized once, reused across warm Lambda invocations)
 comprehend = boto3.client("comprehend", config=_config)
 dynamodb = boto3.resource("dynamodb", config=_config)
 
-TABLE_NAME = "SentimentReviews"
+TABLE_NAME = os.environ.get("DYNAMO_TABLE", "SentimentReviews")
 table = dynamodb.Table(TABLE_NAME)
+
+RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
+RAPIDAPI_AMAZON_HOST = os.environ.get("RAPIDAPI_AMAZON_HOST", "")
+RAPIDAPI_WALMART_HOST = os.environ.get("RAPIDAPI_WALMART_HOST", "")
+
+REVIEW_COUNT_TARGET = 25
+COMPREHEND_CHAR_LIMIT = 5000
+SAMPLE_COUNT = 3
 
 
 # ---------------------------------------------------------------------------
@@ -32,11 +48,6 @@ table = dynamodb.Table(TABLE_NAME)
 # ---------------------------------------------------------------------------
 
 def lambda_handler(event, context):
-    """
-    API Gateway HTTP API sends events with:
-      event["routeKey"]  -> e.g. "POST /analyze" or "GET /history"
-      event["body"]      -> JSON string for POST requests
-    """
     logger.info("Event received: %s", json.dumps(event))
 
     route = event.get("routeKey", "")
@@ -49,106 +60,43 @@ def lambda_handler(event, context):
         else:
             return response(404, {"error": f"Route not found: {route}"})
 
+    except BadRequestError as e:
+        return response(400, {"error": str(e)})
+    except UpstreamError as e:
+        return response(502, {"error": str(e)})
     except Exception as e:
         logger.error("Unhandled error: %s", str(e), exc_info=True)
         return response(500, {"error": "Internal server error", "detail": str(e)})
 
 
+class BadRequestError(Exception):
+    pass
+
+
+class UpstreamError(Exception):
+    pass
+
+
 # ---------------------------------------------------------------------------
-# POST /analyze
+# Route handlers (filled in by later tasks)
 # ---------------------------------------------------------------------------
 
 def handle_analyze(event):
-    """Parse the review text, call Comprehend, store result in DynamoDB."""
-
-    # Parse request body
-    body = event.get("body", "{}")
-    if isinstance(body, str):
-        body = json.loads(body)
-
-    review_text = body.get("review", "").strip()
-
-    if not review_text:
-        return response(400, {"error": "Missing required field: 'review'"})
-
-    if len(review_text) > 5000:
-        return response(400, {"error": "Review text exceeds 5000 character limit"})
-
-    # Call Amazon Comprehend
-    logger.info("Calling Comprehend for text of length %d", len(review_text))
-    comprehend_result = comprehend.detect_sentiment(
-        Text=review_text,
-        LanguageCode="en"
-    )
-
-    sentiment = comprehend_result["Sentiment"]           # e.g. "POSITIVE"
-    scores = comprehend_result["SentimentScore"]        # dict of floats
-
-    # Round scores to 4 decimal places for readability
-    scores_rounded = {k: round(v, 4) for k, v in scores.items()}
-
-    # Build the item to store
-    review_id = str(uuid.uuid4())
-    timestamp = datetime.now(timezone.utc).isoformat()
-
-    item = {
-        "reviewId":  review_id,
-        "timestamp": timestamp,
-        "reviewText": review_text,
-        "sentiment": sentiment,
-        "scores": {
-            "positive": scores_rounded["Positive"],
-            "negative": scores_rounded["Negative"],
-            "neutral":  scores_rounded["Neutral"],
-            "mixed":    scores_rounded["Mixed"],
-        },
-    }
-
-    # Store in DynamoDB
-    table.put_item(Item=item)
-    logger.info("Stored review %s with sentiment %s", review_id, sentiment)
-
-    return response(200, {
-        "reviewId":  review_id,
-        "sentiment": sentiment,
-        "scores":    item["scores"],
-        "timestamp": timestamp,
-    })
-
-
-# ---------------------------------------------------------------------------
-# GET /history
-# ---------------------------------------------------------------------------
+    raise NotImplementedError
 
 def handle_history():
-    """Return the 10 most recent reviews from DynamoDB."""
-
-    # Scan the whole table (fine for a student project with small data)
-    result = table.scan(
-        ProjectionExpression="reviewId, #ts, reviewText, sentiment, scores",
-        ExpressionAttributeNames={"#ts": "timestamp"},  # 'timestamp' is reserved
-    )
-
-    items = result.get("Items", [])
-
-    # Sort by timestamp descending, return top 10
-    items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-    recent = items[:10]
-
-    return response(200, {"reviews": recent, "count": len(recent)})
+    raise NotImplementedError
 
 
 # ---------------------------------------------------------------------------
-# Helper
+# Response helper
 # ---------------------------------------------------------------------------
 
 def response(status_code, body):
-    """Build a properly formatted API Gateway HTTP response."""
     return {
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
-            # Allow requests from your S3 website or localhost during testing
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "Content-Type",
             "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
