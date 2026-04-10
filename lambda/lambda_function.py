@@ -82,10 +82,75 @@ class UpstreamError(Exception):
 # ---------------------------------------------------------------------------
 
 def handle_analyze(event):
-    raise NotImplementedError
+    body = event.get("body", "{}")
+    if isinstance(body, str):
+        body = json.loads(body)
+
+    url = (body.get("url") or "").strip()
+    site, product_id = parse_product_url(url)
+
+    if site == "amazon":
+        product_title, reviews = fetch_amazon_reviews(product_id)
+    else:
+        product_title, reviews = fetch_walmart_reviews(product_id)
+
+    if not reviews:
+        return response(200, {
+            "productTitle": product_title,
+            "site": site,
+            "reviewCount": 0,
+            "message": "This product has no reviews yet.",
+        })
+
+    sentiment_results = analyze_reviews(reviews)
+    if not sentiment_results:
+        raise UpstreamError("Sentiment analysis failed for all reviews.")
+
+    summary = aggregate(sentiment_results)
+
+    record_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    item = {
+        "id": record_id,
+        "timestamp": timestamp,
+        "productUrl": url,
+        "productTitle": product_title,
+        "site": site,
+        "overallSentiment": summary["overallSentiment"],
+        "aggregateScores": summary["aggregateScores"],
+        "reviewCount": len(sentiment_results),
+    }
+    table.put_item(Item=item)
+    logger.info("Stored analysis %s for %s (%s reviews)", record_id, url, len(sentiment_results))
+
+    return response(200, {
+        "productTitle": product_title,
+        "site": site,
+        "overallSentiment": summary["overallSentiment"],
+        "aggregateScores": summary["aggregateScores"],
+        "reviewCount": len(sentiment_results),
+        "topPositive": summary["topPositive"],
+        "topNegative": summary["topNegative"],
+    })
+
 
 def handle_history():
-    raise NotImplementedError
+    result = table.scan(
+        ProjectionExpression="id, #ts, productUrl, productTitle, site, overallSentiment, aggregateScores, reviewCount",
+        ExpressionAttributeNames={"#ts": "timestamp"},
+    )
+    items = result.get("Items", [])
+    items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    recent = items[:10]
+
+    for item in recent:
+        scores = item.get("aggregateScores") or {}
+        item["aggregateScores"] = {k: float(v) for k, v in scores.items()}
+        if "reviewCount" in item:
+            item["reviewCount"] = int(item["reviewCount"])
+
+    return response(200, {"analyses": recent, "count": len(recent)})
 
 
 # ---------------------------------------------------------------------------
