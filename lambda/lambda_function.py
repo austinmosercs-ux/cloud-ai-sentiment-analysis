@@ -89,6 +89,59 @@ def handle_history():
 
 
 # ---------------------------------------------------------------------------
+# URL parsing
+# ---------------------------------------------------------------------------
+
+AMAZON_ASIN_PATTERNS = [
+    re.compile(r"/dp/([A-Z0-9]{10})(?:[/?]|$)"),
+    re.compile(r"/gp/product/([A-Z0-9]{10})(?:[/?]|$)"),
+    re.compile(r"/gp/aw/d/([A-Z0-9]{10})(?:[/?]|$)"),
+]
+
+WALMART_ITEM_PATTERN = re.compile(r"/ip/(?:[^/]+/)?(\d+)(?:[/?]|$)")
+
+
+def parse_product_url(url):
+    """
+    Return (site, product_id) for a supported product URL.
+
+    site is 'amazon' or 'walmart'.
+    Raises BadRequestError for anything else.
+    """
+    if not url or not isinstance(url, str):
+        raise BadRequestError("Missing or invalid URL.")
+
+    try:
+        parsed = urllib.parse.urlparse(url.strip())
+    except ValueError:
+        raise BadRequestError("Malformed URL.")
+
+    host = (parsed.netloc or "").lower()
+    path = parsed.path or ""
+
+    if "amazon." in host:
+        for pattern in AMAZON_ASIN_PATTERNS:
+            match = pattern.search(path)
+            if match:
+                return "amazon", match.group(1)
+        raise BadRequestError(
+            "Could not find an Amazon product ID (ASIN) in that URL."
+        )
+
+    if "walmart.com" in host:
+        match = WALMART_ITEM_PATTERN.search(path)
+        if match:
+            return "walmart", match.group(1)
+        raise BadRequestError(
+            "Could not find a Walmart item ID in that URL."
+        )
+
+    raise BadRequestError(
+        "Only Amazon and Walmart product links are supported."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Response helper
 # ---------------------------------------------------------------------------
 
