@@ -89,6 +89,100 @@ def handle_history():
 
 
 # ---------------------------------------------------------------------------
+# Sentiment analysis and aggregation
+# ---------------------------------------------------------------------------
+
+def analyze_reviews(reviews):
+    """
+    Run Comprehend DetectSentiment on each review.
+
+    Input: list of dicts with 'text' key (plus optional metadata).
+    Output: list of dicts with keys:
+        'text', 'label', 'positive', 'negative', 'neutral', 'mixed'
+    Reviews whose Comprehend call fails are skipped.
+    """
+    results = []
+    for review in reviews:
+        text = review["text"]
+        payload_text = text[:COMPREHEND_CHAR_LIMIT]
+        try:
+            resp = comprehend.detect_sentiment(
+                Text=payload_text,
+                LanguageCode="en",
+            )
+        except Exception as e:
+            logger.warning("Comprehend call failed, skipping review: %s", e)
+            continue
+
+        scores = resp["SentimentScore"]
+        results.append({
+            "text": text,
+            "label": resp["Sentiment"],
+            "positive": float(scores["Positive"]),
+            "negative": float(scores["Negative"]),
+            "neutral": float(scores["Neutral"]),
+            "mixed": float(scores["Mixed"]),
+        })
+
+    return results
+
+
+def aggregate(results):
+    """
+    Combine per-review sentiment results into an overall verdict.
+
+    Returns a dict with:
+        'overallSentiment': str
+        'aggregateScores': {positive, negative, neutral, mixed} (floats, rounded)
+        'topPositive': [{text, score}, ...] up to SAMPLE_COUNT items
+        'topNegative': [{text, score}, ...] up to SAMPLE_COUNT items
+    """
+    if not results:
+        return {
+            "overallSentiment": "NEUTRAL",
+            "aggregateScores": {"positive": 0.0, "negative": 0.0, "neutral": 0.0, "mixed": 0.0},
+            "topPositive": [],
+            "topNegative": [],
+        }
+
+    n = len(results)
+    agg = {
+        "positive": sum(r["positive"] for r in results) / n,
+        "negative": sum(r["negative"] for r in results) / n,
+        "neutral": sum(r["neutral"] for r in results) / n,
+        "mixed": sum(r["mixed"] for r in results) / n,
+    }
+
+    if agg["positive"] > 0.60:
+        verdict = "POSITIVE"
+    elif agg["negative"] > 0.40:
+        verdict = "NEGATIVE"
+    elif agg["positive"] > 0.30 and agg["negative"] > 0.30:
+        verdict = "MIXED"
+    else:
+        verdict = "NEUTRAL"
+
+    by_positive = sorted(results, key=lambda r: r["positive"], reverse=True)
+    by_negative = sorted(results, key=lambda r: r["negative"], reverse=True)
+
+    top_positive = [
+        {"text": r["text"], "score": round(r["positive"], 4)}
+        for r in by_positive[:SAMPLE_COUNT]
+    ]
+    top_negative = [
+        {"text": r["text"], "score": round(r["negative"], 4)}
+        for r in by_negative[:SAMPLE_COUNT]
+    ]
+
+    return {
+        "overallSentiment": verdict,
+        "aggregateScores": {k: round(v, 4) for k, v in agg.items()},
+        "topPositive": top_positive,
+        "topNegative": top_negative,
+    }
+
+
+# ---------------------------------------------------------------------------
 # RapidAPI scraping
 # ---------------------------------------------------------------------------
 
