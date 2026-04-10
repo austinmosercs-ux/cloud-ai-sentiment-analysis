@@ -96,6 +96,8 @@ def _rapidapi_get(host, path, params):
     """Perform a GET against a RapidAPI host. Returns parsed JSON."""
     if not RAPIDAPI_KEY:
         raise UpstreamError("RapidAPI key is not configured.")
+    if not host:
+        raise UpstreamError("RapidAPI host is not configured.")
 
     query = urllib.parse.urlencode(params)
     url = f"https://{host}{path}?{query}"
