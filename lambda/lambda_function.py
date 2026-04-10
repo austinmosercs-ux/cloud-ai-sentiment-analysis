@@ -104,7 +104,11 @@ def analyze_reviews(reviews):
     results = []
     for review in reviews:
         text = review["text"]
-        payload_text = text[:COMPREHEND_CHAR_LIMIT]
+        encoded = text.encode("utf-8")
+        if len(encoded) > COMPREHEND_CHAR_LIMIT:
+            payload_text = encoded[:COMPREHEND_CHAR_LIMIT].decode("utf-8", errors="ignore")
+        else:
+            payload_text = text
         try:
             resp = comprehend.detect_sentiment(
                 Text=payload_text,
