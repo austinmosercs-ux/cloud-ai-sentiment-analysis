@@ -89,6 +89,124 @@ def handle_history():
 
 
 # ---------------------------------------------------------------------------
+# RapidAPI scraping
+# ---------------------------------------------------------------------------
+
+def _rapidapi_get(host, path, params):
+    """Perform a GET against a RapidAPI host. Returns parsed JSON."""
+    if not RAPIDAPI_KEY:
+        raise UpstreamError("RapidAPI key is not configured.")
+
+    query = urllib.parse.urlencode(params)
+    url = f"https://{host}{path}?{query}"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "x-rapidapi-key": RAPIDAPI_KEY,
+            "x-rapidapi-host": host,
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        logger.error("RapidAPI HTTP error: %s %s", e.code, e.reason)
+        raise UpstreamError(f"Scraping API returned HTTP {e.code}.")
+    except urllib.error.URLError as e:
+        logger.error("RapidAPI URL error: %s", e.reason)
+        raise UpstreamError("Scraping API is unreachable.")
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        raise UpstreamError("Scraping API returned invalid JSON.")
+
+
+def fetch_amazon_reviews(asin):
+    """
+    Call the RapidAPI Amazon reviews endpoint.
+
+    Returns (product_title, reviews) where reviews is a list of dicts
+    with keys: 'text' (str), 'rating' (int or None), 'author' (str or None).
+    """
+    # NOTE: adjust path and params to match the API you subscribed to.
+    data = _rapidapi_get(
+        RAPIDAPI_AMAZON_HOST,
+        "/product-reviews",
+        {
+            "asin": asin,
+            "country": "US",
+            "sort_by": "TOP_REVIEWS",
+            "verified_purchases_only": "false",
+            "page_size": str(REVIEW_COUNT_TARGET),
+        },
+    )
+
+    # Typical shape for Real-Time Amazon Data:
+    #   { "data": { "product_title": "...", "reviews": [ { "review_comment": "...", "review_star_rating": "5", "review_author": "..." }, ... ] } }
+    payload = data.get("data") or {}
+    product_title = payload.get("product_title") or "Unknown product"
+    raw_reviews = payload.get("reviews") or []
+
+    reviews = []
+    for r in raw_reviews[:REVIEW_COUNT_TARGET]:
+        text = (r.get("review_comment") or r.get("review_text") or "").strip()
+        if not text:
+            continue
+        rating_raw = r.get("review_star_rating") or r.get("rating")
+        try:
+            rating = int(float(rating_raw)) if rating_raw is not None else None
+        except (TypeError, ValueError):
+            rating = None
+        author = r.get("review_author") or r.get("author")
+        reviews.append({"text": text, "rating": rating, "author": author})
+
+    return product_title, reviews
+
+
+def fetch_walmart_reviews(item_id):
+    """
+    Call the RapidAPI Walmart reviews endpoint.
+
+    Returns (product_title, reviews) with the same shape as fetch_amazon_reviews.
+    """
+    # NOTE: adjust path and params to match the API you subscribed to.
+    data = _rapidapi_get(
+        RAPIDAPI_WALMART_HOST,
+        "/product-reviews",
+        {
+            "productId": item_id,
+            "page": "1",
+        },
+    )
+
+    # Typical shape:
+    #   { "product": { "title": "..." }, "reviews": [ { "text": "...", "rating": 4, "author": "..." }, ... ] }
+    product_title = (
+        (data.get("product") or {}).get("title")
+        or data.get("product_title")
+        or "Unknown product"
+    )
+    raw_reviews = data.get("reviews") or []
+
+    reviews = []
+    for r in raw_reviews[:REVIEW_COUNT_TARGET]:
+        text = (r.get("text") or r.get("review_text") or "").strip()
+        if not text:
+            continue
+        rating_raw = r.get("rating") or r.get("stars")
+        try:
+            rating = int(float(rating_raw)) if rating_raw is not None else None
+        except (TypeError, ValueError):
+            rating = None
+        author = r.get("author") or r.get("user_name")
+        reviews.append({"text": text, "rating": rating, "author": author})
+
+    return product_title, reviews
+
+
+# ---------------------------------------------------------------------------
 # URL parsing
 # ---------------------------------------------------------------------------
 
