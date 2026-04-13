@@ -303,85 +303,167 @@
 </div>
 
 <script type="module">
-  // ── CONFIG ──────────────────────────────────────────────────────
-  // Replace this with your actual API Gateway URL after deployment.
+  // CONFIG
   const API_BASE = "https://wqg809a91a.execute-api.us-east-1.amazonaws.com/";
 
-  // ── Char counter ────────────────────────────────────────────────
-  function updateCharCount() {
-    const text = document.getElementById("reviewText").value;
-    document.getElementById("charCount").textContent = text.length;
+  // DOM references
+  const urlInput         = document.getElementById("productUrl");
+  const analyzeBtn       = document.getElementById("analyzeBtn");
+  const errorMsg         = document.getElementById("errorMsg");
+  const resultCard       = document.getElementById("result");
+  const productTitleEl   = document.getElementById("productTitle");
+  const badge            = document.getElementById("sentimentBadge");
+  const reviewCountLabel = document.getElementById("reviewCountLabel");
+  const scoresContainer  = document.getElementById("scoresContainer");
+  const topPositiveList  = document.getElementById("topPositiveList");
+  const topNegativeList  = document.getElementById("topNegativeList");
+
+  analyzeBtn.addEventListener("click", analyzeProduct);
+  urlInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") analyzeProduct();
+  });
+
+  // URL validation
+  const URL_HINT = /(amazon\.|walmart\.com)/i;
+
+  function isLikelySupportedUrl(value) {
+    return URL_HINT.test(value);
   }
 
-  // ── Analyze ─────────────────────────────────────────────────────
-  async function analyzeReview() {
-    const reviewText = document.getElementById("reviewText").value.trim();
-    const errorMsg   = document.getElementById("errorMsg");
-    const btn        = document.getElementById("analyzeBtn");
-
+  // Analyze
+  async function analyzeProduct() {
+    const url = urlInput.value.trim();
     errorMsg.textContent = "";
 
-    if (!reviewText) {
-      errorMsg.textContent = "Please enter a review before analyzing.";
+    if (!url) {
+      errorMsg.textContent = "Please paste a product URL.";
+      return;
+    }
+    if (!isLikelySupportedUrl(url)) {
+      errorMsg.textContent = "Only Amazon and Walmart product links are supported.";
       return;
     }
 
-    // Loading state
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Analyzing…';
+    analyzeBtn.disabled = true;
+    setButtonPhase("Fetching reviews…");
 
     try {
+      const phaseTimer = setTimeout(() => setButtonPhase("Analyzing sentiment…"), 2500);
+
       const res = await fetch(`${API_BASE}/analyze`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ review: reviewText }),
+        body:    JSON.stringify({ url }),
       });
+      clearTimeout(phaseTimer);
 
       const data = await res.json();
-
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
 
-      showResult(data);
-      loadHistory();   // refresh history after new analysis
-
+      renderResult(data);
+      loadHistory();
     } catch (err) {
       errorMsg.textContent = `Error: ${err.message}`;
     } finally {
-      btn.disabled = false;
-      btn.textContent = "Analyze Sentiment";
+      analyzeBtn.disabled = false;
+      analyzeBtn.textContent = "Analyze Reviews";
     }
   }
 
-  // ── Render result ────────────────────────────────────────────────
-  function showResult(data) {
-    const resultCard = document.getElementById("result");
-    const badge      = document.getElementById("sentimentBadge");
-    const scores     = document.getElementById("scoresContainer");
+  function setButtonPhase(label) {
+    analyzeBtn.replaceChildren();
+    const spinner = document.createElement("span");
+    spinner.className = "spinner";
+    analyzeBtn.appendChild(spinner);
+    analyzeBtn.appendChild(document.createTextNode(label));
+  }
 
-    badge.textContent  = data.sentiment;
-    badge.className    = `sentiment-badge badge-${data.sentiment}`;
+  // Render result
+  function renderResult(data) {
+    productTitleEl.textContent = data.productTitle || "Result";
 
-    const scoreOrder = ["positive", "negative", "neutral", "mixed"];
-    scores.innerHTML = scoreOrder.map(key => {
-      const pct  = (data.scores[key] * 100).toFixed(1);
-      const UPPER = key.toUpperCase();
-      return `
-        <div class="score-row">
-          <span class="score-label">${key}</span>
-          <div class="bar-bg">
-            <div class="bar-fill bar-${UPPER}" style="width:${pct}%"></div>
-          </div>
-          <span class="score-pct">${pct}%</span>
-        </div>`;
-    }).join("");
+    if (data.reviewCount === 0) {
+      badge.textContent = "—";
+      badge.className = "sentiment-badge";
+      reviewCountLabel.textContent = data.message || "This product has no reviews yet.";
+      scoresContainer.replaceChildren();
+      topPositiveList.replaceChildren();
+      topNegativeList.replaceChildren();
+      resultCard.style.display = "block";
+      resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
+
+    badge.textContent = data.overallSentiment;
+    badge.className = `sentiment-badge badge-${data.overallSentiment}`;
+    reviewCountLabel.textContent = `based on ${data.reviewCount} reviews`;
+
+    renderScoreBars(data.aggregateScores);
+    renderSampleList(topPositiveList, data.topPositive, "positive-item");
+    renderSampleList(topNegativeList, data.topNegative, "negative-item");
 
     resultCard.style.display = "block";
     resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
-  // ── History ──────────────────────────────────────────────────────
+  function renderScoreBars(scores) {
+    scoresContainer.replaceChildren();
+    const order = ["positive", "negative", "neutral", "mixed"];
+    for (const key of order) {
+      const pct = (scores[key] * 100).toFixed(1);
+
+      const row = document.createElement("div");
+      row.className = "score-row";
+
+      const label = document.createElement("span");
+      label.className = "score-label";
+      label.textContent = key;
+
+      const bg = document.createElement("div");
+      bg.className = "bar-bg";
+      const fill = document.createElement("div");
+      fill.className = `bar-fill bar-${key.toUpperCase()}`;
+      fill.style.width = `${pct}%`;
+      bg.appendChild(fill);
+
+      const pctEl = document.createElement("span");
+      pctEl.className = "score-pct";
+      pctEl.textContent = `${pct}%`;
+
+      row.appendChild(label);
+      row.appendChild(bg);
+      row.appendChild(pctEl);
+      scoresContainer.appendChild(row);
+    }
+  }
+
+  function renderSampleList(listEl, samples, cssClass) {
+    listEl.replaceChildren();
+    if (!samples || samples.length === 0) {
+      const li = document.createElement("li");
+      li.textContent = "No samples available.";
+      listEl.appendChild(li);
+      return;
+    }
+    for (const s of samples) {
+      const li = document.createElement("li");
+      li.className = cssClass;
+
+      const truncated = s.text.length > 300 ? s.text.slice(0, 300) + "…" : s.text;
+      li.appendChild(document.createTextNode(truncated));
+
+      const scoreSpan = document.createElement("span");
+      scoreSpan.className = "sample-score";
+      scoreSpan.textContent = `confidence ${(s.score * 100).toFixed(0)}%`;
+      li.appendChild(scoreSpan);
+
+      listEl.appendChild(li);
+    }
+  }
+
+  // History
   async function loadHistory() {
     const historyCard = document.getElementById("history");
     const tbody       = document.getElementById("historyBody");
@@ -389,49 +471,71 @@
     try {
       const res  = await fetch(`${API_BASE}/history`);
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-      if (!data.reviews || data.reviews.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#a0aec0;padding:1rem">No reviews yet.</td></tr>`;
+      tbody.replaceChildren();
+      const analyses = data.analyses || [];
+
+      if (analyses.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.style.textAlign = "center";
+        td.style.color = "#a0aec0";
+        td.style.padding = "1rem";
+        td.textContent = "No analyses yet.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
       } else {
-        tbody.innerHTML = data.reviews.map(r => {
-          const time = new Date(r.timestamp).toLocaleString();
-          const conf = (topScore(r.scores) * 100).toFixed(0) + "%";
-          const truncated = r.reviewText.length > 60
-            ? r.reviewText.slice(0, 60) + "…"
-            : r.reviewText;
-          return `
-            <tr>
-              <td class="review-cell" title="${escapeHtml(r.reviewText)}">${escapeHtml(truncated)}</td>
-              <td><span class="sentiment-badge badge-${r.sentiment}" style="font-size:.75rem;padding:.2rem .6rem">${r.sentiment}</span></td>
-              <td>${conf}</td>
-              <td>${time}</td>
-            </tr>`;
-        }).join("");
+        for (const a of analyses) {
+          tbody.appendChild(buildHistoryRow(a));
+        }
       }
 
       historyCard.style.display = "block";
-
     } catch (err) {
       console.error("History load failed:", err.message);
     }
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────
-  function topScore(scores) {
-    return Math.max(scores.positive, scores.negative, scores.neutral, scores.mixed);
+  function buildHistoryRow(a) {
+    const tr = document.createElement("tr");
+
+    const productCell = document.createElement("td");
+    productCell.className = "review-cell";
+    const link = document.createElement("a");
+    link.href = a.productUrl || "#";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = a.productTitle || "(untitled)";
+    productCell.title = a.productTitle || "";
+    productCell.appendChild(link);
+    tr.appendChild(productCell);
+
+    const siteCell = document.createElement("td");
+    siteCell.textContent = (a.site || "").toUpperCase();
+    tr.appendChild(siteCell);
+
+    const sentimentCell = document.createElement("td");
+    const sentBadge = document.createElement("span");
+    sentBadge.className = `sentiment-badge badge-${a.overallSentiment}`;
+    sentBadge.style.fontSize = ".75rem";
+    sentBadge.style.padding = ".2rem .6rem";
+    sentBadge.textContent = a.overallSentiment || "—";
+    sentimentCell.appendChild(sentBadge);
+    tr.appendChild(sentimentCell);
+
+    const countCell = document.createElement("td");
+    countCell.textContent = String(a.reviewCount || 0);
+    tr.appendChild(countCell);
+
+    const timeCell = document.createElement("td");
+    timeCell.textContent = a.timestamp ? new Date(a.timestamp).toLocaleString() : "";
+    tr.appendChild(timeCell);
+
+    return tr;
   }
 
-  function escapeHtml(str) {
-    return str
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
-  }
-
-  // Load history on page load
   await loadHistory();
 </script>
 </body>
