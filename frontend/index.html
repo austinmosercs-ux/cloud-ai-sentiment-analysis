@@ -167,38 +167,52 @@
 
   <!-- ── Analyze Card ──────────────────────────────────────────── -->
   <div class="card">
-    <h2>Analyze a Review</h2>
-    <textarea id="reviewText"
-      placeholder="Paste a customer review here…"
-      maxlength="5000"
-      oninput="updateCharCount()"></textarea>
-    <div class="char-count"><span id="charCount">0</span> / 5000</div>
+    <h2>Analyze a Product</h2>
+    <input id="productUrl" type="url"
+      placeholder="Paste an Amazon or Walmart product link…"
+      class="url-input" />
+    <div class="hint">
+      Example: <code>https://www.amazon.com/dp/B08N5WRWNW</code>
+    </div>
     <div id="errorMsg" class="error-msg"></div>
-    <button id="analyzeBtn" onclick="analyzeReview()">Analyze Sentiment</button>
+    <button id="analyzeBtn">Analyze Reviews</button>
   </div>
 
   <!-- ── Result Card ───────────────────────────────────────────── -->
   <div class="card" id="result">
-    <h2>Result</h2>
-    <div>
-      <strong>Overall Sentiment: </strong>
+    <h2 id="productTitle">Result</h2>
+    <div class="verdict-row">
+      <strong>Overall Verdict: </strong>
       <span class="sentiment-badge" id="sentimentBadge"></span>
+      <span class="review-count" id="reviewCountLabel"></span>
     </div>
     <div class="scores" id="scoresContainer"></div>
+
+    <div class="samples">
+      <div class="sample-col">
+        <h3 class="sample-heading positive-heading">Top Positive Reviews</h3>
+        <ul id="topPositiveList" class="sample-list"></ul>
+      </div>
+      <div class="sample-col">
+        <h3 class="sample-heading negative-heading">Top Critical Reviews</h3>
+        <ul id="topNegativeList" class="sample-list"></ul>
+      </div>
+    </div>
   </div>
 
   <!-- ── History Card ─────────────────────────────────────────── -->
   <div class="card" id="history">
     <div class="history-header">
-      <h2>Recent Reviews</h2>
+      <h2>Recently Analyzed Products</h2>
       <button id="refreshBtn" onclick="loadHistory()">Refresh</button>
     </div>
     <table>
       <thead>
         <tr>
-          <th>Review</th>
+          <th>Product</th>
+          <th>Site</th>
           <th>Sentiment</th>
-          <th>Confidence</th>
+          <th>Reviews</th>
           <th>Time</th>
         </tr>
       </thead>
