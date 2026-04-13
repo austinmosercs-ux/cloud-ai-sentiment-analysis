@@ -154,6 +154,86 @@
 
     /* ── Error ────────────────────────────────────────────────── */
     .error-msg { color: #e53e3e; font-size: .9rem; margin-top: .75rem; }
+
+    /* ── URL input ─────────────────────────────────────────────── */
+    .url-input {
+      width: 100%;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      padding: .75rem 1rem;
+      font-size: .95rem;
+      font-family: inherit;
+      transition: border-color .2s;
+    }
+    .url-input:focus { outline: none; border-color: #4299e1; }
+
+    .hint {
+      font-size: .78rem;
+      color: #a0aec0;
+      margin-top: .4rem;
+    }
+    .hint code {
+      background: #edf2f7;
+      padding: .1rem .35rem;
+      border-radius: 4px;
+      font-size: .75rem;
+    }
+
+    /* ── Verdict row ───────────────────────────────────────────── */
+    .verdict-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: .5rem;
+      flex-wrap: wrap;
+    }
+    .review-count {
+      font-size: .82rem;
+      color: #718096;
+    }
+
+    /* ── Sample reviews ────────────────────────────────────────── */
+    .samples {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    @media (max-width: 600px) {
+      .samples { grid-template-columns: 1fr; }
+    }
+    .sample-col h3 {
+      font-size: .85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: .5rem;
+    }
+    .positive-heading { color: #276749; }
+    .negative-heading { color: #9b2c2c; }
+    .sample-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+    .sample-list li {
+      background: #f7fafc;
+      border-left: 3px solid #cbd5e0;
+      padding: .55rem .7rem;
+      border-radius: 4px;
+      font-size: .82rem;
+      line-height: 1.4;
+      color: #4a5568;
+    }
+    .sample-list li.positive-item { border-left-color: #48bb78; }
+    .sample-list li.negative-item { border-left-color: #fc8181; }
+    .sample-list .sample-score {
+      display: block;
+      font-size: .72rem;
+      color: #a0aec0;
+      margin-top: .25rem;
+    }
   </style>
 </head>
 <body>
