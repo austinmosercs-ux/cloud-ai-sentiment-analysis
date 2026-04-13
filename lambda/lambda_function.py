@@ -82,7 +82,7 @@ class UpstreamError(Exception):
 # ---------------------------------------------------------------------------
 
 def handle_analyze(event):
-    body = event.get("body", "{}")
+    body = event.get("body") or "{}"
     if isinstance(body, str):
         body = json.loads(body)
 
