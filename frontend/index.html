@@ -284,7 +284,7 @@
   <div class="card" id="history">
     <div class="history-header">
       <h2>Recently Analyzed Products</h2>
-      <button id="refreshBtn" onclick="loadHistory()">Refresh</button>
+      <button id="refreshBtn">Refresh</button>
     </div>
     <table>
       <thead>
@@ -319,6 +319,7 @@
   const topNegativeList  = document.getElementById("topNegativeList");
 
   analyzeBtn.addEventListener("click", analyzeProduct);
+  document.getElementById("refreshBtn").addEventListener("click", loadHistory);
   urlInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") analyzeProduct();
   });
@@ -355,9 +356,9 @@
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ url }),
       });
-      clearTimeout(phaseTimer);
 
       const data = await res.json();
+      clearTimeout(phaseTimer);
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
@@ -447,7 +448,7 @@
       listEl.appendChild(li);
       return;
     }
-    for (const s of samples) {
+    for (const s of samples.slice(0, 3)) {
       const li = document.createElement("li");
       li.className = cssClass;
 
@@ -506,7 +507,7 @@
     const link = document.createElement("a");
     link.href = a.productUrl || "#";
     link.target = "_blank";
-    link.rel = "noopener";
+    link.rel = "noopener noreferrer";
     link.textContent = a.productTitle || "(untitled)";
     productCell.title = a.productTitle || "";
     productCell.appendChild(link);
