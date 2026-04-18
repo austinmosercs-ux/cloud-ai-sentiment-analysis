@@ -15,6 +15,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import boto3
 from botocore.config import Config
@@ -118,7 +119,7 @@ def handle_analyze(event):
         "productTitle": product_title,
         "site": site,
         "overallSentiment": summary["overallSentiment"],
-        "aggregateScores": summary["aggregateScores"],
+        "aggregateScores": {k: Decimal(str(v)) for k, v in summary["aggregateScores"].items()},
         "reviewCount": len(sentiment_results),
     }
     table.put_item(Item=item)
