@@ -93,7 +93,7 @@ def handle_analyze(event):
     if site == "amazon":
         product_title, reviews = fetch_amazon_reviews(product_id)
     else:
-        product_title, reviews = fetch_walmart_reviews(product_id)
+        product_title, reviews = fetch_walmart_reviews(url)
 
     if not reviews:
         return response(200, {
@@ -113,7 +113,7 @@ def handle_analyze(event):
     timestamp = datetime.now(timezone.utc).isoformat()
 
     item = {
-        "id": record_id,
+        "reviewId": record_id,
         "timestamp": timestamp,
         "productUrl": url,
         "productTitle": product_title,
@@ -138,7 +138,7 @@ def handle_analyze(event):
 
 def handle_history():
     result = table.scan(
-        ProjectionExpression="id, #ts, productUrl, productTitle, site, overallSentiment, aggregateScores, reviewCount",
+        ProjectionExpression="reviewId, #ts, productUrl, productTitle, site, overallSentiment, aggregateScores, reviewCount",
         ExpressionAttributeNames={"#ts": "timestamp"},
     )
     items = result.get("Items", [])
@@ -331,18 +331,17 @@ def fetch_amazon_reviews(asin):
     return product_title, reviews
 
 
-def fetch_walmart_reviews(item_id):
+def fetch_walmart_reviews(product_url):
     """
     Call the RapidAPI Walmart reviews endpoint.
 
     Returns (product_title, reviews) with the same shape as fetch_amazon_reviews.
     """
-    # NOTE: adjust path and params to match the API you subscribed to.
     data = _rapidapi_get(
         RAPIDAPI_WALMART_HOST,
         "/product-reviews",
         {
-            "productId": item_id,
+            "url": product_url,
             "page": "1",
         },
     )
