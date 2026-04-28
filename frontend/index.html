@@ -39,27 +39,6 @@
     }
     .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #4a5568; }
 
-    .rating-summary {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 1rem;
-      margin-top: .25rem;
-    }
-
-    .rating-value {
-      font-size: 2.4rem;
-      font-weight: 800;
-      line-height: 1;
-      color: #1a202c;
-    }
-
-    .rating-meta {
-      color: #718096;
-      font-size: .9rem;
-      text-align: right;
-    }
-
     .analysis-summary {
       display: grid;
       gap: .35rem;
@@ -85,64 +64,239 @@
       font-size: .92rem;
     }
 
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: .75rem;
-      margin-top: .75rem;
+    /* ── Review Statistics: editorial structure, app palette ─── */
+    #overallRatingCard {
+      padding: 1.6rem 1.5rem 1.4rem;
     }
 
-    .stat-card {
-      background: linear-gradient(180deg, #f7fafc 0%, #edf2f7 100%);
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: .85rem .9rem;
-    }
-
-    .stat-label {
-      color: #718096;
-      font-size: .75rem;
+    .stats-eyebrow {
+      font-size: .72rem !important;
+      font-weight: 700 !important;
+      letter-spacing: .14em !important;
       text-transform: uppercase;
-      letter-spacing: .06em;
+      color: #718096 !important;
+      margin: 0 0 1.4rem !important;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+    .stats-eyebrow::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, #e2e8f0 0%, transparent 80%);
     }
 
-    .stat-value {
-      margin-top: .3rem;
-      font-size: 1.25rem;
+    .headline-rating {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1.5rem;
+      align-items: end;
+      padding-bottom: 1.5rem;
+      margin-bottom: 1.6rem;
+      border-bottom: 1px solid #edf2f7;
+    }
+
+    .rating-number {
+      font-size: 3.4rem;
+      line-height: .9;
       font-weight: 800;
       color: #1a202c;
+      letter-spacing: -.025em;
+      font-variant-numeric: tabular-nums;
+    }
+    .rating-number .denom {
+      font-size: 1.5rem;
+      color: #cbd5e0;
+      font-weight: 600;
+      letter-spacing: 0;
+      margin-left: .1em;
+    }
+    .rating-caption {
+      margin-top: .5rem;
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #a0aec0;
     }
 
+    .headline-meta {
+      text-align: right;
+      align-self: end;
+      padding-bottom: .25rem;
+    }
+    .headline-meta .count {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #1a202c;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .headline-meta .count-label {
+      margin-top: .25rem;
+      font-size: .85rem;
+      color: #4a5568;
+    }
+    .headline-meta .count-source {
+      margin-top: .25rem;
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #a0aec0;
+    }
+
+    .stats-section {
+      margin-bottom: 1.6rem;
+    }
+    .stats-section-label {
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #718096;
+      margin-bottom: .85rem;
+    }
+
+    /* Sentiment bar */
+    .sentiment-bar {
+      display: flex;
+      height: 14px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #edf2f7;
+      margin-bottom: 1rem;
+    }
+    .sentiment-bar-segment {
+      transition: flex .6s cubic-bezier(.2,.8,.2,1);
+      position: relative;
+    }
+    .sentiment-bar-segment.pos { background: #48bb78; }
+    .sentiment-bar-segment.neg { background: #fc8181; }
+    .sentiment-bar-segment.neu { background: #90cdf4; }
+    .sentiment-bar-segment.mix { background: #f6ad55; }
+    .sentiment-bar-segment + .sentiment-bar-segment {
+      box-shadow: inset 1px 0 0 rgba(255,255,255,.5);
+    }
+
+    .sentiment-legend {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .6rem;
+    }
+    .sentiment-pill {
+      padding: .65rem .8rem .7rem;
+      border-radius: 8px;
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 3px solid;
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .sentiment-pill.pos { border-left-color: #48bb78; }
+    .sentiment-pill.neg { border-left-color: #fc8181; }
+    .sentiment-pill.neu { border-left-color: #90cdf4; }
+    .sentiment-pill.mix { border-left-color: #f6ad55; }
+    .sentiment-pill:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px -8px rgba(45,55,72,.25);
+    }
+    .sentiment-pill .label {
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #718096;
+    }
+    .sentiment-pill .value {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #1a202c;
+      line-height: 1.1;
+      margin-top: .2rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .sentiment-pill .pct {
+      font-size: .72rem;
+      color: #718096;
+      margin-top: .1rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Distribution */
     .distribution {
       display: grid;
-      gap: .55rem;
-      margin-top: 1rem;
+      gap: .5rem;
     }
-
     .distribution-row {
       display: grid;
-      grid-template-columns: 60px 1fr 42px;
-      gap: .65rem;
+      grid-template-columns: 70px 1fr 36px;
+      gap: 1rem;
       align-items: center;
     }
-
+    .distribution-row .stars {
+      font-size: 1rem;
+      letter-spacing: 0;
+      color: #2d3748;
+      line-height: 1;
+    }
+    .distribution-row .stars .empty { color: #cbd5e0; }
     .distribution-track {
-      height: 10px;
+      height: 7px;
       background: #edf2f7;
       border-radius: 999px;
       overflow: hidden;
     }
-
     .distribution-fill {
       height: 100%;
       border-radius: 999px;
+      transition: width .8s cubic-bezier(.2,.8,.2,1);
       background: linear-gradient(90deg, #2b6cb0, #48bb78);
     }
-
-    .distribution-value {
-      font-size: .8rem;
-      text-align: right;
+    .distribution-row .count {
+      font-size: .85rem;
+      font-weight: 600;
       color: #4a5568;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Footer metadata */
+    .stats-meta {
+      margin-top: 1.6rem;
+      padding-top: 1.2rem;
+      border-top: 1px solid #edf2f7;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+    .stats-meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: .2rem;
+    }
+    .stats-meta-item .label {
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #718096;
+    }
+    .stats-meta-item .value {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1a202c;
+      line-height: 1.15;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 540px) {
+      #overallRatingCard { padding: 1.4rem 1.25rem 1.2rem; }
+      .headline-rating { grid-template-columns: 1fr; gap: .85rem; }
+      .headline-meta { text-align: left; }
+      .rating-number { font-size: 3.6rem; }
+      .sentiment-legend { grid-template-columns: repeat(2, 1fr); }
+      .stats-meta { grid-template-columns: repeat(2, 1fr); row-gap: 1rem; }
     }
 
     /* ── Form ─────────────────────────────────────────────────── */
@@ -286,13 +440,28 @@
 
   <!-- ── Overall Rating Card ──────────────────────────────────── -->
   <div class="card" id="overallRatingCard">
-    <h2>Review Statistics</h2>
-    <div class="rating-summary">
-      <div class="rating-value" id="overallRatingValue">0.0 / 5</div>
-      <div class="rating-meta" id="overallRatingMeta">No product analyzed yet.</div>
+    <h2 class="stats-eyebrow">Review Statistics</h2>
+    <div class="headline-rating">
+      <div>
+        <div class="rating-number" id="ratingNumber">&mdash;<span class="denom">/5</span></div>
+        <div class="rating-caption">Avg sentiment score</div>
+      </div>
+      <div class="headline-meta">
+        <div class="count" id="ratingCount">0</div>
+        <div class="count-label" id="ratingCountLabel">reviews pending</div>
+        <div class="count-source">via Amazon Comprehend</div>
+      </div>
     </div>
-    <div class="stats-grid" id="statsGrid"></div>
-    <div class="distribution" id="distributionBars"></div>
+    <div class="stats-section" id="sentimentSection" hidden>
+      <div class="stats-section-label">Sentiment Breakdown</div>
+      <div class="sentiment-bar" id="sentimentBar"></div>
+      <div class="sentiment-legend" id="sentimentLegend"></div>
+    </div>
+    <div class="stats-section" id="distributionSection" hidden>
+      <div class="stats-section-label">Rating Distribution</div>
+      <div class="distribution" id="distributionBars"></div>
+    </div>
+    <div class="stats-meta" id="statsMeta" hidden></div>
   </div>
 
   <!-- ── Analyzed Reviews Card ───────────────────────────────── -->
@@ -306,7 +475,7 @@
           <th>Review</th>
           <th>Sentiment</th>
           <th>Rating</th>
-          <th>Time</th>
+          <th>Confidence</th>
         </tr>
       </thead>
       <tbody id="analyzedReviewsBody"></tbody>
@@ -416,49 +585,71 @@
 
   // ── Statistics ─────────────────────────────────────────────────
   function renderStatistics(data) {
-    const overallRatingValue = document.getElementById("overallRatingValue");
-    const overallRatingMeta = document.getElementById("overallRatingMeta");
-    const statsGrid = document.getElementById("statsGrid");
-    const distributionBars = document.getElementById("distributionBars");
-
     const stats = data.stats;
     const product = data.product || {};
     const amazonRating = product.amazonRating;
     const amazonReviewCount = product.amazonReviewCount;
 
-    overallRatingValue.textContent = `${stats.averageRating.toFixed(2)} / 5`;
-    overallRatingMeta.textContent = `${stats.reviewCount} review${stats.reviewCount === 1 ? "" : "s"} analyzed from this product.`;
+    // Headline
+    document.getElementById("ratingNumber").innerHTML =
+      `${stats.averageRating.toFixed(2)}<span class="denom">/5</span>`;
+    document.getElementById("ratingCount").textContent = stats.reviewCount;
+    document.getElementById("ratingCountLabel").textContent =
+      `${stats.reviewCount === 1 ? "review" : "reviews"} analyzed`;
 
-    statsGrid.innerHTML = [
-      statCard("Median", `${stats.medianRating.toFixed(2)} / 5`),
-      statCard("Std Dev", stats.ratingStdDev.toFixed(2)),
-      statCard("Positive", `${stats.positiveCount} (${stats.positivePercent.toFixed(1)}%)`),
-      statCard("Negative", `${stats.negativeCount} (${stats.negativePercent.toFixed(1)}%)`),
-      statCard("Neutral",  `${stats.neutralCount} (${stats.neutralPercent.toFixed(1)}%)`),
-      statCard("Mixed",    `${stats.mixedCount} (${stats.mixedPercent.toFixed(1)}%)`),
-      statCard("Amazon Rating", amazonRating ? `${amazonRating.toFixed(1)} / 5` : "N/A"),
-      statCard("Amazon Reviews", amazonReviewCount ? amazonReviewCount.toLocaleString() : "N/A"),
-    ].join("");
+    // Sentiment bar + legend
+    const sentiments = [
+      { kind: "pos", label: "Positive", count: stats.positiveCount, pct: stats.positivePercent },
+      { kind: "neg", label: "Negative", count: stats.negativeCount, pct: stats.negativePercent },
+      { kind: "neu", label: "Neutral",  count: stats.neutralCount,  pct: stats.neutralPercent  },
+      { kind: "mix", label: "Mixed",    count: stats.mixedCount,    pct: stats.mixedPercent    },
+    ];
 
-    distributionBars.innerHTML = [5, 4, 3, 2, 1].map(star => {
+    const segments = sentiments.filter(s => s.pct > 0);
+    document.getElementById("sentimentBar").innerHTML = segments.length === 0
+      ? `<div class="sentiment-bar-segment neu" style="flex:1"></div>`
+      : segments.map(s => `<div class="sentiment-bar-segment ${s.kind}" style="flex:${s.pct}" title="${s.label} ${s.pct.toFixed(1)}%"></div>`).join("");
+
+    document.getElementById("sentimentLegend").innerHTML = sentiments.map(s => `
+      <div class="sentiment-pill ${s.kind}">
+        <div class="label">${s.label}</div>
+        <div class="value">${s.count}</div>
+        <div class="pct">${s.pct.toFixed(1)}%</div>
+      </div>`).join("");
+
+    document.getElementById("sentimentSection").hidden = false;
+
+    // Distribution
+    document.getElementById("distributionBars").innerHTML = [5, 4, 3, 2, 1].map(star => {
       const count = stats.ratingDistribution[String(star)] || 0;
       const pct = stats.reviewCount === 0 ? 0 : (count / stats.reviewCount) * 100;
+      const filled = "★".repeat(star);
+      const empty  = "★".repeat(5 - star);
       return `
         <div class="distribution-row">
-          <div>${star} star</div>
+          <div class="stars">${filled}<span class="empty">${empty}</span></div>
           <div class="distribution-track">
-            <div class="distribution-fill" style="width:${pct}%"></div>
+            <div class="distribution-fill s${star}" style="width:${pct}%"></div>
           </div>
-          <div class="distribution-value">${count}</div>
+          <div class="count">${count}</div>
         </div>`;
     }).join("");
+    document.getElementById("distributionSection").hidden = false;
 
-    if (amazonRating) {
-      const summaryLine = document.createElement("div");
-      summaryLine.style.cssText = "margin-top:.75rem;color:#718096;font-size:.85rem;";
-      summaryLine.textContent = `Amazon reports ${amazonRating.toFixed(1)} / 5 across ${amazonReviewCount ? amazonReviewCount.toLocaleString() : "unknown"} ratings.`;
-      distributionBars.appendChild(summaryLine);
-    }
+    // Footer metadata
+    const fmtAmazonRating = amazonRating ? `${amazonRating.toFixed(1)} / 5` : "N/A";
+    const fmtAmazonCount  = amazonReviewCount ? amazonReviewCount.toLocaleString() : "N/A";
+    document.getElementById("statsMeta").innerHTML = [
+      metaItem("Median",         `${stats.medianRating.toFixed(2)} / 5`),
+      metaItem("Std Dev",        stats.ratingStdDev.toFixed(2)),
+      metaItem("Amazon Rating",  fmtAmazonRating),
+      metaItem("Amazon Reviews", fmtAmazonCount),
+    ].join("");
+    document.getElementById("statsMeta").hidden = false;
+  }
+
+  function metaItem(label, value) {
+    return `<div class="stats-meta-item"><div class="label">${label}</div><div class="value">${value}</div></div>`;
   }
 
   // ── Analyzed reviews list ───────────────────────────────────────
@@ -489,14 +680,6 @@
   }
 
   // ── Helpers ──────────────────────────────────────────────────────
-  function statCard(label, value) {
-    return `
-      <div class="stat-card">
-        <div class="stat-label">${label}</div>
-        <div class="stat-value">${value}</div>
-      </div>`;
-  }
-
   function scoreLabel(scores) {
     const winner = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
     return `${winner[0]} ${(winner[1] * 100).toFixed(0)}%`;
