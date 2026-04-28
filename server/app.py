@@ -1,13 +1,16 @@
 """
-AI Sentiment Analysis - AWS Lambda Function
+AI Sentiment Analysis - Flask web server (EC2-deployable).
 
 POST /analyze - Pull reviews for an Amazon product (via RapidAPI's
                 Real-Time Amazon Data) and run sentiment analysis on
                 each with Amazon Comprehend.
+GET  /healthz - Liveness check.
 
 Required environment variables:
   RAPIDAPI_KEY          - RapidAPI account key
   RAPIDAPI_AMAZON_HOST  - e.g. real-time-amazon-data.p.rapidapi.com
+
+AWS credentials come from the EC2 instance profile (no static keys).
 """
 
 import json
@@ -24,51 +27,48 @@ from urllib.parse import urlparse
 
 import boto3
 from botocore.config import Config
+from flask import Flask, jsonify, request
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
-# Explicit timeouts satisfy SonarQube S7618 and prevent hanging Lambda executions
+# Explicit timeouts prevent hung worker processes
 _config = Config(connect_timeout=5, read_timeout=25)
 comprehend = boto3.client("comprehend", config=_config)
 
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
 RAPIDAPI_HOST = os.environ.get("RAPIDAPI_AMAZON_HOST", "")
 
-# Real-Time Amazon Data returns ~10 reviews per page; 3 pages -> up to 30, capped at 25
 PAGES_TO_FETCH = 3
 TARGET_REVIEWS = 25
 RAPIDAPI_TIMEOUT = 25
-
-# Amazon Comprehend DetectSentiment limit is 5000 UTF-8 bytes per document
 COMPREHEND_MAX_BYTES = 5000
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+}
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-def lambda_handler(event, context):
-    logger.info("Event received: %s", json.dumps(event))
-    route = event.get("routeKey", "")
-    try:
-        if route == "POST /analyze":
-            return handle_analyze(event)
-        return response(404, {"error": f"Route not found: {route}"})
-    except Exception as e:
-        logger.error("Unhandled error: %s", str(e), exc_info=True)
-        return response(500, {"error": "Internal server error", "detail": str(e)})
+app = Flask(__name__)
 
 
 # ---------------------------------------------------------------------------
-# POST /analyze
+# Routes
 # ---------------------------------------------------------------------------
 
-def handle_analyze(event):
-    body = event.get("body", "{}")
-    if isinstance(body, str):
-        body = json.loads(body)
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    ok = bool(RAPIDAPI_KEY and RAPIDAPI_HOST)
+    return _json({"ok": ok, "rapidapi_configured": ok}, 200)
 
+
+@app.route("/analyze", methods=["POST", "OPTIONS"])
+def analyze():
+    if request.method == "OPTIONS":
+        return _json({}, 204)
+
+    body = request.get_json(silent=True) or {}
     asin, error = _validate_request(body)
     if error:
         return error
@@ -79,22 +79,22 @@ def handle_analyze(event):
         return _rapidapi_error_response(exc)
     except urllib.error.URLError as exc:
         logger.error("RapidAPI URLError: %s", exc, exc_info=True)
-        return response(504, {"error": "Review fetch timed out. Try again."})
+        return _json({"error": "Review fetch timed out. Try again."}, 504)
 
     if not review_items:
-        return response(502, {
+        return _json({
             "error": "No reviews could be retrieved for that product.",
             "diagnostics": product_meta.get("_diagnostics") or [],
-        })
+        }, 502)
 
     documents = [truncate_to_bytes(item["text"], COMPREHEND_MAX_BYTES) for item in review_items]
     sentiments = batch_detect_sentiment(documents)
     analyzed_reviews = _build_analyzed_reviews(review_items, documents, sentiments)
 
     if not analyzed_reviews:
-        return response(502, {"error": "All reviews failed sentiment analysis."})
+        return _json({"error": "All reviews failed sentiment analysis."}, 502)
 
-    return response(200, {
+    return _json({
         "product": {
             "asin": asin,
             "url": (body.get("productUrl") or "").strip(),
@@ -105,32 +105,47 @@ def handle_analyze(event):
         "reviews": analyzed_reviews,
         "stats": build_stats(analyzed_reviews),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
+    }, 200)
 
+
+@app.errorhandler(404)
+def not_found(_):
+    return _json({"error": "Not found"}, 404)
+
+
+@app.errorhandler(500)
+def server_error(exc):
+    logger.error("Unhandled error: %s", exc, exc_info=True)
+    return _json({"error": "Internal server error"}, 500)
+
+
+# ---------------------------------------------------------------------------
+# Request validation / error helpers
+# ---------------------------------------------------------------------------
 
 def _validate_request(body):
-    """Return (asin, None) on success, or (None, error_response) on failure."""
+    """Return (asin, None) on success, or (None, response) on failure."""
     product_url = (body.get("productUrl") or "").strip()
     if not product_url:
-        return None, response(400, {"error": "Missing required field: 'productUrl'"})
+        return None, _json({"error": "Missing required field: 'productUrl'"}, 400)
 
     if not product_url.startswith(("http://", "https://")):
-        return None, response(400, {"error": "Please paste a full Amazon product link."})
+        return None, _json({"error": "Please paste a full Amazon product link."}, 400)
 
     if "amazon." not in urlparse(product_url).netloc:
-        return None, response(400, {"error": "That doesn't look like an Amazon link."})
+        return None, _json({"error": "That doesn't look like an Amazon link."}, 400)
 
     asin = extract_asin(product_url)
     if not asin:
-        return None, response(400, {
+        return None, _json({
             "error": "Could not find the product ASIN. The link should contain /dp/XXXXXXXXXX."
-        })
+        }, 400)
 
     if not RAPIDAPI_KEY or not RAPIDAPI_HOST:
-        logger.error("RAPIDAPI_KEY or RAPIDAPI_AMAZON_HOST is not set on this Lambda.")
-        return None, response(500, {
+        logger.error("RAPIDAPI_KEY or RAPIDAPI_AMAZON_HOST is not set.")
+        return None, _json({
             "error": "Server is missing RAPIDAPI_KEY or RAPIDAPI_AMAZON_HOST environment variables."
-        })
+        }, 500)
 
     return asin, None
 
@@ -143,10 +158,10 @@ def _rapidapi_error_response(exc):
     except Exception:
         pass
     if exc.code in (401, 403):
-        return response(502, {"error": "RapidAPI rejected the API key.", "detail": detail})
+        return _json({"error": "RapidAPI rejected the API key.", "detail": detail}, 502)
     if exc.code == 429:
-        return response(502, {"error": "RapidAPI rate limit hit. Try again shortly.", "detail": detail})
-    return response(502, {"error": f"Review fetch failed (HTTP {exc.code}).", "detail": detail})
+        return _json({"error": "RapidAPI rate limit hit. Try again shortly.", "detail": detail}, 502)
+    return _json({"error": f"Review fetch failed (HTTP {exc.code}).", "detail": detail}, 502)
 
 
 def _build_analyzed_reviews(review_items, documents, sentiments):
@@ -193,7 +208,6 @@ def extract_asin(url):
 
 
 def fetch_amazon_reviews(asin):
-    """Fetch up to TARGET_REVIEWS reviews via RapidAPI, requesting pages in parallel."""
     pages = list(range(1, PAGES_TO_FETCH + 1))
     page_results = _fetch_pages_in_parallel(asin, pages)
 
@@ -241,12 +255,12 @@ def _fetch_one_page(asin, page):
         "page": str(page),
     })
     url = f"https://{RAPIDAPI_HOST}/product-reviews?{params}"
-    request = urllib.request.Request(url, headers={
+    req = urllib.request.Request(url, headers={
         "x-rapidapi-host": RAPIDAPI_HOST,
         "x-rapidapi-key": RAPIDAPI_KEY,
     })
     logger.info("Fetching RapidAPI for ASIN %s page %d", asin, page)
-    with urllib.request.urlopen(request, timeout=RAPIDAPI_TIMEOUT) as resp:
+    with urllib.request.urlopen(req, timeout=RAPIDAPI_TIMEOUT) as resp:
         data = json.loads(resp.read().decode("utf-8", errors="ignore"))
     logger.info("Page %d: status=%s, reviews=%d", page,
                 data.get("status"),
@@ -283,7 +297,6 @@ def _extract_review_items(data):
 
 
 def _diagnose_response(data, page):
-    """Cheap signals so the frontend can show what came back when 0 reviews extracted."""
     payload = data.get("data") if isinstance(data, dict) else None
     return {
         "page": page,
@@ -299,7 +312,6 @@ def _diagnose_response(data, page):
 # ---------------------------------------------------------------------------
 
 def batch_detect_sentiment(documents):
-    """Return Comprehend results aligned to input order; None for any per-doc errors."""
     if not documents:
         return []
     result = comprehend.batch_detect_sentiment(TextList=documents, LanguageCode="en")
@@ -397,14 +409,14 @@ def _to_int(value):
         return None
 
 
-def response(status_code, body):
-    return {
-        "statusCode": status_code,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-        },
-        "body": json.dumps(body),
-    }
+def _json(payload, status_code):
+    response = jsonify(payload)
+    response.status_code = status_code
+    for key, value in CORS_HEADERS.items():
+        response.headers[key] = value
+    return response
+
+
+if __name__ == "__main__":
+    # Local development only; production runs via gunicorn (see deploy/sentiment.service)
+    app.run(host="0.0.0.0", port=8000, debug=True)

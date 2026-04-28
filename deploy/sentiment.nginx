@@ -1,0 +1,32 @@
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    root /home/ec2-user/sentiment/frontend;
+    index index.html;
+
+    # Frontend (static files)
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # API: proxy to gunicorn
+    location = /analyze {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Sentiment analysis can take ~25-30s; allow plenty of headroom
+        proxy_read_timeout 90s;
+        proxy_send_timeout 90s;
+    }
+
+    location = /healthz {
+        proxy_pass http://127.0.0.1:8000;
+        access_log off;
+    }
+}

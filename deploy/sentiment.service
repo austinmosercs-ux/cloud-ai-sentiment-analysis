@@ -1,0 +1,23 @@
+[Unit]
+Description=Amazon Review Sentiment Analyzer (gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/home/ec2-user/sentiment/server
+EnvironmentFile=/etc/sentiment.env
+ExecStart=/home/ec2-user/sentiment/.venv/bin/gunicorn \
+    --workers 2 \
+    --threads 4 \
+    --timeout 90 \
+    --bind 127.0.0.1:8000 \
+    --access-logfile - \
+    --error-logfile - \
+    app:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

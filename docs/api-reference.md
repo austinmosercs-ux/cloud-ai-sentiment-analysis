@@ -1,13 +1,28 @@
 # API Reference
 
-Base URL: `https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com`
+Base URL: `http://<EC2_PUBLIC_DNS>` — same origin as the frontend. nginx
+serves `index.html` and reverse-proxies `/analyze` and `/healthz` to
+gunicorn on `127.0.0.1:8000`.
 
-The Lambda requires two environment variables:
+The Flask app requires two environment variables (set in
+`/etc/sentiment.env` and read by the systemd unit):
 
 | Env var                 | Value                                       |
 |-------------------------|---------------------------------------------|
 | `RAPIDAPI_KEY`          | Your RapidAPI account key                   |
 | `RAPIDAPI_AMAZON_HOST`  | `real-time-amazon-data.p.rapidapi.com`      |
+
+AWS credentials for Comprehend come from the EC2 **instance profile** —
+no static keys live on the instance.
+
+## GET /healthz
+
+Liveness probe. Returns 200 always; `ok` is `true` only when both
+RapidAPI env vars are set.
+
+```json
+{ "ok": true, "rapidapi_configured": true }
+```
 
 ---
 
@@ -156,16 +171,20 @@ browser without checking CloudWatch.
 
 ## Example test payloads
 
-Use these to verify your deployment works end-to-end:
+Use these to verify your deployment works end-to-end. Replace `<EC2_PUBLIC_DNS>`
+with the instance's public DNS (e.g. `ec2-3-90-12-34.compute-1.amazonaws.com`).
 
 ```bash
 # A product likely to have many reviews
-curl -X POST https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/analyze \
+curl -X POST http://<EC2_PUBLIC_DNS>/analyze \
   -H "Content-Type: application/json" \
   -d '{"productUrl": "https://www.amazon.com/dp/B0BMLD2GYD"}'
 
 # Pasted directly from Amazon (with tracking params) — also works
-curl -X POST https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/analyze \
+curl -X POST http://<EC2_PUBLIC_DNS>/analyze \
   -H "Content-Type: application/json" \
   -d '{"productUrl": "https://www.amazon.com/MoKo-Generation-Stand/dp/B0B8STRJYJ/?th=1"}'
+
+# Liveness check
+curl http://<EC2_PUBLIC_DNS>/healthz
 ```
