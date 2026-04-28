@@ -257,7 +257,7 @@
 
   <header>
     <h1>Amazon Review Analyzer</h1>
-    <p>Paste an Amazon product link to extract customer review comments and stats</p>
+    <p>Paste an Amazon product link to score the first 25 customer reviews</p>
   </header>
 
   <!-- ── Analyze Card ──────────────────────────────────────────── -->
@@ -336,13 +336,12 @@
     errorMsg.textContent = "";
 
     if (!productUrl) {
-      errorMsg.textContent = "Please enter an Amazon product link before analyzing.";
+      errorMsg.textContent = "Please paste an Amazon product link before analyzing.";
       return;
     }
 
-    // Loading state
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Analyzing…';
+    btn.innerHTML = '<span class="spinner"></span>Fetching reviews…';
 
     try {
       const res = await fetch(`${API_BASE}/analyze`, {
@@ -373,15 +372,31 @@
   // ── Render result ────────────────────────────────────────────────
   function showResult(data) {
     const resultCard = document.getElementById("result");
-
     const title = document.getElementById("productTitle");
     const subtitle = document.getElementById("productSubtitle");
 
-    title.textContent = data.product.title || "Amazon product";
-    subtitle.textContent = `ASIN ${data.product.asin || "unknown"} · ${data.reviews.length} comments extracted`;
+    const product = data.product || {};
+    title.textContent = product.title || "Amazon product";
+
+    const top = topSentiment(data.stats);
+    const summary = top
+      ? `Overall sentiment: ${top.label} (${top.percent.toFixed(0)}%)`
+      : "Sentiment results below.";
+    subtitle.textContent = `ASIN ${product.asin || "unknown"} · ${data.reviews.length} reviews analyzed · ${summary}`;
 
     resultCard.style.display = "block";
     resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function topSentiment(stats) {
+    const entries = [
+      { label: "Positive", percent: stats.positivePercent },
+      { label: "Negative", percent: stats.negativePercent },
+      { label: "Neutral",  percent: stats.neutralPercent  },
+      { label: "Mixed",    percent: stats.mixedPercent    },
+    ];
+    entries.sort((a, b) => b.percent - a.percent);
+    return entries[0].percent > 0 ? entries[0] : null;
   }
 
   // ── Statistics ─────────────────────────────────────────────────
@@ -392,19 +407,20 @@
     const distributionBars = document.getElementById("distributionBars");
 
     const stats = data.stats;
-    const amazonRating = data.product.amazonRating;
-    const amazonReviewCount = data.product.amazonReviewCount;
+    const product = data.product || {};
+    const amazonRating = product.amazonRating;
+    const amazonReviewCount = product.amazonReviewCount;
 
     overallRatingValue.textContent = `${stats.averageRating.toFixed(2)} / 5`;
-    overallRatingMeta.textContent = `${stats.reviewCount} review comments analyzed from this product.`;
+    overallRatingMeta.textContent = `${stats.reviewCount} review${stats.reviewCount === 1 ? "" : "s"} analyzed from this product.`;
 
     statsGrid.innerHTML = [
       statCard("Median", `${stats.medianRating.toFixed(2)} / 5`),
       statCard("Std Dev", stats.ratingStdDev.toFixed(2)),
       statCard("Positive", `${stats.positiveCount} (${stats.positivePercent.toFixed(1)}%)`),
       statCard("Negative", `${stats.negativeCount} (${stats.negativePercent.toFixed(1)}%)`),
-      statCard("Neutral", `${stats.neutralCount} (${stats.neutralPercent.toFixed(1)}%)`),
-      statCard("Mixed", `${stats.mixedCount} (${stats.mixedPercent.toFixed(1)}%)`),
+      statCard("Neutral",  `${stats.neutralCount} (${stats.neutralPercent.toFixed(1)}%)`),
+      statCard("Mixed",    `${stats.mixedCount} (${stats.mixedPercent.toFixed(1)}%)`),
       statCard("Amazon Rating", amazonRating ? `${amazonRating.toFixed(1)} / 5` : "N/A"),
       statCard("Amazon Reviews", amazonReviewCount ? amazonReviewCount.toLocaleString() : "N/A"),
     ].join("");
