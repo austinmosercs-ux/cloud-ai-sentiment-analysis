@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Sentiment Analysis</title>
+  <title>Amazon Review Analyzer</title>
   <style>
     /* ── Reset & Base ─────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,6 +38,112 @@
       margin-bottom: 1.5rem;
     }
     .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #4a5568; }
+
+    .rating-summary {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: .25rem;
+    }
+
+    .rating-value {
+      font-size: 2.4rem;
+      font-weight: 800;
+      line-height: 1;
+      color: #1a202c;
+    }
+
+    .rating-meta {
+      color: #718096;
+      font-size: .9rem;
+      text-align: right;
+    }
+
+    .analysis-summary {
+      display: grid;
+      gap: .35rem;
+    }
+
+    .analysis-kicker {
+      color: #718096;
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 700;
+    }
+
+    .analysis-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #1a202c;
+      line-height: 1.35;
+    }
+
+    .analysis-subtitle {
+      color: #4a5568;
+      font-size: .92rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: .75rem;
+      margin-top: .75rem;
+    }
+
+    .stat-card {
+      background: linear-gradient(180deg, #f7fafc 0%, #edf2f7 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: .85rem .9rem;
+    }
+
+    .stat-label {
+      color: #718096;
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .stat-value {
+      margin-top: .3rem;
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #1a202c;
+    }
+
+    .distribution {
+      display: grid;
+      gap: .55rem;
+      margin-top: 1rem;
+    }
+
+    .distribution-row {
+      display: grid;
+      grid-template-columns: 60px 1fr 42px;
+      gap: .65rem;
+      align-items: center;
+    }
+
+    .distribution-track {
+      height: 10px;
+      background: #edf2f7;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .distribution-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #2b6cb0, #48bb78);
+    }
+
+    .distribution-value {
+      font-size: .8rem;
+      text-align: right;
+      color: #4a5568;
+    }
 
     /* ── Form ─────────────────────────────────────────────────── */
     textarea {
@@ -110,8 +216,8 @@
     .bar-MIXED    { background: #f6ad55; }
     .score-pct { width: 44px; text-align: right; font-size: .82rem; color: #718096; }
 
-    /* ── History table ────────────────────────────────────────── */
-    #history { display: none; }
+    /* ── Analyzed reviews table ───────────────────────────────── */
+    #analyzedReviews { display: none; }
 
     .history-header {
       display: flex;
@@ -120,17 +226,6 @@
       margin-bottom: .75rem;
     }
     .history-header h2 { margin: 0; }
-
-    #refreshBtn {
-      width: auto;
-      margin: 0;
-      padding: .4rem .9rem;
-      font-size: .82rem;
-      background: #edf2f7;
-      color: #4a5568;
-      border-radius: 6px;
-    }
-    #refreshBtn:hover { background: #e2e8f0; }
 
     table { width: 100%; border-collapse: collapse; font-size: .85rem; }
     thead tr { border-bottom: 2px solid #edf2f7; }
@@ -161,47 +256,60 @@
 <div class="container">
 
   <header>
-    <h1>AI Sentiment Analysis</h1>
-    <p>Powered by Amazon Comprehend &amp; AWS Lambda</p>
+    <h1>Amazon Review Analyzer</h1>
+    <p>Paste an Amazon product link to extract customer review comments and stats</p>
   </header>
 
   <!-- ── Analyze Card ──────────────────────────────────────────── -->
   <div class="card">
-    <h2>Analyze a Review</h2>
+    <h2>Analyze a Product</h2>
     <textarea id="reviewText"
-      placeholder="Paste a customer review here…"
+      placeholder="Paste an Amazon product link here…"
       maxlength="5000"></textarea>
     <div class="char-count"><span id="charCount">0</span> / 5000</div>
+    <div style="color:#718096;font-size:.85rem;margin-top:.35rem;">
+      Example: <span style="background:#edf2f7;padding:.1rem .4rem;border-radius:.35rem;">https://www.amazon.com/dp/B0BMLD2GYD</span>
+    </div>
     <div id="errorMsg" class="error-msg"></div>
-    <button id="analyzeBtn">Analyze Sentiment</button>
+    <button id="analyzeBtn">Analyze Product</button>
   </div>
 
   <!-- ── Result Card ───────────────────────────────────────────── -->
   <div class="card" id="result">
-    <h2>Result</h2>
-    <div>
-      <strong>Overall Sentiment: </strong>
-      <span class="sentiment-badge" id="sentimentBadge"></span>
+    <h2>Product Summary</h2>
+    <div class="analysis-summary">
+      <div class="analysis-kicker">Amazon Product</div>
+      <div class="analysis-title" id="productTitle">Waiting for a product link</div>
+      <div class="analysis-subtitle" id="productSubtitle">The latest analysis will appear here.</div>
     </div>
-    <div class="scores" id="scoresContainer"></div>
   </div>
 
-  <!-- ── History Card ─────────────────────────────────────────── -->
-  <div class="card" id="history">
+  <!-- ── Overall Rating Card ──────────────────────────────────── -->
+  <div class="card" id="overallRatingCard">
+    <h2>Review Statistics</h2>
+    <div class="rating-summary">
+      <div class="rating-value" id="overallRatingValue">0.0 / 5</div>
+      <div class="rating-meta" id="overallRatingMeta">No product analyzed yet.</div>
+    </div>
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="distribution" id="distributionBars"></div>
+  </div>
+
+  <!-- ── Analyzed Reviews Card ───────────────────────────────── -->
+  <div class="card" id="analyzedReviews">
     <div class="history-header">
-      <h2>Recent Reviews</h2>
-      <button id="refreshBtn">Refresh</button>
+      <h2>Extracted Review Comments</h2>
     </div>
     <table>
       <thead>
         <tr>
           <th>Review</th>
           <th>Sentiment</th>
-          <th>Confidence</th>
+          <th>Rating</th>
           <th>Time</th>
         </tr>
       </thead>
-      <tbody id="historyBody"></tbody>
+      <tbody id="analyzedReviewsBody"></tbody>
     </table>
   </div>
 
@@ -211,6 +319,7 @@
   // ── CONFIG ──────────────────────────────────────────────────────
   // Replace this with your actual API Gateway URL after deployment.
   const API_BASE = "https://wqg809a91a.execute-api.us-east-1.amazonaws.com";
+  let currentAnalysis = null;
 
   // ── Char counter ────────────────────────────────────────────────
   function updateCharCount() {
@@ -220,14 +329,14 @@
 
   // ── Analyze ─────────────────────────────────────────────────────
   async function analyzeReview() {
-    const reviewText = document.getElementById("reviewText").value.trim();
+    const productUrl = document.getElementById("reviewText").value.trim();
     const errorMsg   = document.getElementById("errorMsg");
     const btn        = document.getElementById("analyzeBtn");
 
     errorMsg.textContent = "";
 
-    if (!reviewText) {
-      errorMsg.textContent = "Please enter a review before analyzing.";
+    if (!productUrl) {
+      errorMsg.textContent = "Please enter an Amazon product link before analyzing.";
       return;
     }
 
@@ -239,7 +348,7 @@
       const res = await fetch(`${API_BASE}/analyze`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ review: reviewText }),
+        body:    JSON.stringify({ productUrl }),
       });
 
       const data = await res.json();
@@ -248,84 +357,118 @@
         throw new Error(data.error || `HTTP ${res.status}`);
       }
 
+      currentAnalysis = data;
       showResult(data);
-      loadHistory();   // refresh history after new analysis
+      renderStatistics(data);
+      renderAnalyzedReviews(data.reviews);
 
     } catch (err) {
       errorMsg.textContent = `Error: ${err.message}`;
     } finally {
       btn.disabled = false;
-      btn.textContent = "Analyze Sentiment";
+      btn.textContent = "Analyze Product";
     }
   }
 
   // ── Render result ────────────────────────────────────────────────
   function showResult(data) {
     const resultCard = document.getElementById("result");
-    const badge      = document.getElementById("sentimentBadge");
-    const scores     = document.getElementById("scoresContainer");
 
-    badge.textContent  = data.sentiment;
-    badge.className    = `sentiment-badge badge-${data.sentiment}`;
+    const title = document.getElementById("productTitle");
+    const subtitle = document.getElementById("productSubtitle");
 
-    const scoreOrder = ["positive", "negative", "neutral", "mixed"];
-    scores.innerHTML = scoreOrder.map(key => {
-      const pct  = (data.scores[key] * 100).toFixed(1);
-      const UPPER = key.toUpperCase();
-      return `
-        <div class="score-row">
-          <span class="score-label">${key}</span>
-          <div class="bar-bg">
-            <div class="bar-fill bar-${UPPER}" style="width:${pct}%"></div>
-          </div>
-          <span class="score-pct">${pct}%</span>
-        </div>`;
-    }).join("");
+    title.textContent = data.product.title || "Amazon product";
+    subtitle.textContent = `ASIN ${data.product.asin || "unknown"} · ${data.reviews.length} comments extracted`;
 
     resultCard.style.display = "block";
     resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
-  // ── History ──────────────────────────────────────────────────────
-  async function loadHistory() {
-    const historyCard = document.getElementById("history");
-    const tbody       = document.getElementById("historyBody");
+  // ── Statistics ─────────────────────────────────────────────────
+  function renderStatistics(data) {
+    const overallRatingValue = document.getElementById("overallRatingValue");
+    const overallRatingMeta = document.getElementById("overallRatingMeta");
+    const statsGrid = document.getElementById("statsGrid");
+    const distributionBars = document.getElementById("distributionBars");
 
-    try {
-      const res  = await fetch(`${API_BASE}/history`);
-      const data = await res.json();
+    const stats = data.stats;
+    const amazonRating = data.product.amazonRating;
+    const amazonReviewCount = data.product.amazonReviewCount;
 
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    overallRatingValue.textContent = `${stats.averageRating.toFixed(2)} / 5`;
+    overallRatingMeta.textContent = `${stats.reviewCount} review comments analyzed from this product.`;
 
-      if (!data.reviews || data.reviews.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#a0aec0;padding:1rem">No reviews yet.</td></tr>`;
-      } else {
-        tbody.innerHTML = data.reviews.map(r => {
-          const time = new Date(r.timestamp).toLocaleString();
-          const conf = (topScore(r.scores) * 100).toFixed(0) + "%";
-          const truncated = r.reviewText.length > 60
-            ? r.reviewText.slice(0, 60) + "…"
-            : r.reviewText;
-          return `
-            <tr>
-              <td class="review-cell" title="${escapeHtml(r.reviewText)}">${escapeHtml(truncated)}</td>
-              <td><span class="sentiment-badge badge-${r.sentiment}" style="font-size:.75rem;padding:.2rem .6rem">${r.sentiment}</span></td>
-              <td>${conf}</td>
-              <td>${time}</td>
-            </tr>`;
-        }).join("");
-      }
+    statsGrid.innerHTML = [
+      statCard("Median", `${stats.medianRating.toFixed(2)} / 5`),
+      statCard("Std Dev", stats.ratingStdDev.toFixed(2)),
+      statCard("Positive", `${stats.positiveCount} (${stats.positivePercent.toFixed(1)}%)`),
+      statCard("Negative", `${stats.negativeCount} (${stats.negativePercent.toFixed(1)}%)`),
+      statCard("Neutral", `${stats.neutralCount} (${stats.neutralPercent.toFixed(1)}%)`),
+      statCard("Mixed", `${stats.mixedCount} (${stats.mixedPercent.toFixed(1)}%)`),
+      statCard("Amazon Rating", amazonRating ? `${amazonRating.toFixed(1)} / 5` : "N/A"),
+      statCard("Amazon Reviews", amazonReviewCount ? amazonReviewCount.toLocaleString() : "N/A"),
+    ].join("");
 
-      historyCard.style.display = "block";
+    distributionBars.innerHTML = [5, 4, 3, 2, 1].map(star => {
+      const count = stats.ratingDistribution[String(star)] || 0;
+      const pct = stats.reviewCount === 0 ? 0 : (count / stats.reviewCount) * 100;
+      return `
+        <div class="distribution-row">
+          <div>${star} star</div>
+          <div class="distribution-track">
+            <div class="distribution-fill" style="width:${pct}%"></div>
+          </div>
+          <div class="distribution-value">${count}</div>
+        </div>`;
+    }).join("");
 
-    } catch (err) {
-      console.error("History load failed:", err.message);
+    if (amazonRating) {
+      const summaryLine = document.createElement("div");
+      summaryLine.style.cssText = "margin-top:.75rem;color:#718096;font-size:.85rem;";
+      summaryLine.textContent = `Amazon reports ${amazonRating.toFixed(1)} / 5 across ${amazonReviewCount ? amazonReviewCount.toLocaleString() : "unknown"} ratings.`;
+      distributionBars.appendChild(summaryLine);
     }
   }
 
+  // ── Analyzed reviews list ───────────────────────────────────────
+  function renderAnalyzedReviews(reviews) {
+    const reviewsCard = document.getElementById("analyzedReviews");
+    const tbody = document.getElementById("analyzedReviewsBody");
+
+    if (!reviews || reviews.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#a0aec0;padding:1rem">No analyzed reviews yet.</td></tr>`;
+      reviewsCard.style.display = "none";
+      return;
+    }
+
+    tbody.innerHTML = reviews.map(review => {
+      const truncated = review.reviewText.length > 140
+        ? review.reviewText.slice(0, 140) + "…"
+        : review.reviewText;
+      return `
+        <tr>
+          <td class="review-cell" title="${escapeHtml(review.reviewText)}">${escapeHtml(truncated)}</td>
+          <td><span class="sentiment-badge badge-${review.sentiment}" style="font-size:.75rem;padding:.2rem .6rem">${review.sentiment}</span></td>
+          <td>${review.rating.toFixed(1)} / 5</td>
+          <td>${scoreLabel(review.scores)}</td>
+        </tr>`;
+    }).join("");
+
+    reviewsCard.style.display = "block";
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────
-  function topScore(scores) {
-    return Math.max(scores.positive, scores.negative, scores.neutral, scores.mixed);
+  function statCard(label, value) {
+    return `
+      <div class="stat-card">
+        <div class="stat-label">${label}</div>
+        <div class="stat-value">${value}</div>
+      </div>`;
+  }
+
+  function scoreLabel(scores) {
+    const winner = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
+    return `${winner[0]} ${(winner[1] * 100).toFixed(0)}%`;
   }
 
   function escapeHtml(str) {
@@ -339,10 +482,9 @@
   // ── Wire up event listeners ──────────────────────────────────────
   document.getElementById("reviewText").addEventListener("input", updateCharCount);
   document.getElementById("analyzeBtn").addEventListener("click", analyzeReview);
-  document.getElementById("refreshBtn").addEventListener("click", loadHistory);
 
-  // Load history on page load
-  await loadHistory();
+  document.getElementById("productTitle").textContent = "Waiting for a product link";
+  document.getElementById("productSubtitle").textContent = "The latest analysis will appear here.";
 </script>
 </body>
 </html>

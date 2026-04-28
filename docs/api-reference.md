@@ -6,7 +6,7 @@ Base URL: `https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com`
 
 ## POST /analyze
 
-Analyzes the sentiment of a customer review using Amazon Comprehend.
+Analyzes an Amazon product page, extracts review comments, and returns sentiment stats plus derived ratings.
 
 ### Request
 
@@ -17,110 +17,75 @@ Content-Type: application/json
 
 ```json
 {
-  "review": "This product is absolutely amazing! Best purchase I've ever made."
+  "productUrl": "https://www.amazon.com/dp/B0BMLD2GYD"
 }
 ```
 
 | Field    | Type   | Required | Max Length | Description         |
 |---------|--------|----------|------------|---------------------|
-| review  | string | Yes      | 5000 chars | The review text     |
+| productUrl  | string | Yes   | 2000 chars | Amazon product link  |
 
 ### Response 200 OK
 
 ```json
 {
-  "reviewId": "3f2a1c4d-8b5e-4a2f-9c1d-7e6b3a2f1c4d",
-  "sentiment": "POSITIVE",
-  "scores": {
-    "positive": 0.9987,
-    "negative": 0.0003,
-    "neutral":  0.0008,
-    "mixed":    0.0002
+  "product": {
+    "title": "MIKA3D ...",
+    "asin": "B0BMLD2GYD",
+    "url": "https://www.amazon.com/dp/B0BMLD2GYD",
+    "amazonRating": 4.2,
+    "amazonReviewCount": 4670
+  },
+  "reviews": [
+    {
+      "reviewId": "review-1-...",
+      "reviewText": "Love this set! No clogging and beautiful colors!",
+      "sentiment": "POSITIVE",
+      "scores": {
+        "positive": 0.9987,
+        "negative": 0.0003,
+        "neutral": 0.0008,
+        "mixed": 0.0002
+      },
+      "rating": 4.9
+    }
+  ],
+  "stats": {
+    "reviewCount": 8,
+    "averageRating": 4.55,
+    "medianRating": 4.7,
+    "ratingStdDev": 0.38,
+    "positiveCount": 6,
+    "negativeCount": 1,
+    "neutralCount": 1,
+    "mixedCount": 0,
+    "positivePercent": 75.0,
+    "negativePercent": 12.5,
+    "neutralPercent": 12.5,
+    "mixedPercent": 0.0,
+    "ratingDistribution": { "1": 0, "2": 1, "3": 1, "4": 2, "5": 4 }
   },
   "timestamp": "2025-09-15T14:32:10.123456+00:00"
 }
 ```
 
-`sentiment` values: `POSITIVE` | `NEGATIVE` | `NEUTRAL` | `MIXED`
-
-All scores are floats between 0 and 1 that sum to ~1.0.
+`sentiment` values: `POSITIVE` | `NEGATIVE` | `NEUTRAL` | `MIXED`.
+Each extracted review gets its own derived rating, and `stats` summarizes the whole set.
 
 ### Response 400 Bad Request
 
 ```json
-{ "error": "Missing required field: 'review'" }
+{ "error": "Missing required field: 'productUrl'" }
 ```
-
----
-
-## GET /history
-
-Returns the 10 most recently analyzed reviews.
-
-### Request
-
-```http
-GET /history
-```
-
-No request body needed.
-
-### Response 200 OK
-
-```json
-{
-  "reviews": [
-    {
-      "reviewId":   "3f2a1c4d-8b5e-4a2f-9c1d-7e6b3a2f1c4d",
-      "timestamp":  "2025-09-15T14:32:10.123456+00:00",
-      "reviewText": "This product is absolutely amazing! Best purchase I've ever made.",
-      "sentiment":  "POSITIVE",
-      "scores": {
-        "positive": 0.9987,
-        "negative": 0.0003,
-        "neutral":  0.0008,
-        "mixed":    0.0002
-      }
-    },
-    {
-      "reviewId":   "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "timestamp":  "2025-09-15T14:28:03.456789+00:00",
-      "reviewText": "The shipping was late and the product was broken. Very disappointed.",
-      "sentiment":  "NEGATIVE",
-      "scores": {
-        "positive": 0.0011,
-        "negative": 0.9923,
-        "neutral":  0.0054,
-        "mixed":    0.0012
-      }
-    }
-  ],
-  "count": 2
-}
-```
-
----
 
 ## Example Test Payloads
 
 Use these to verify your deployment works end-to-end:
 
 ```bash
-# Strongly positive
-{"review": "Absolutely love this! Far exceeded my expectations. Will definitely buy again."}
+# Example Amazon product link
+{"productUrl": "https://www.amazon.com/dp/B0BMLD2GYD"}
 
-# Strongly negative
-{"review": "Terrible product. Broke after one day, customer service was useless. Do not buy."}
-
-# Neutral / informational
-{"review": "I purchased this item on Tuesday and it arrived on Friday as expected."}
-
-# Mixed sentiment
-{"review": "The price is great and delivery was fast, but the quality isn't what I expected."}
-
-# Edge case — very short
-{"review": "Good."}
-
-# Edge case — question / no clear sentiment
-{"review": "Does this come in blue?"}
+# Another Amazon product link
+{"productUrl": "https://www.amazon.com/dp/B07VY3PXJ4"}
 ```
