@@ -353,6 +353,14 @@
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.diagnostics) {
+          console.warn("Lambda diagnostics:", data.diagnostics);
+          const diag = data.diagnostics.map(formatDiagnostic).join(" | ");
+          throw new Error(`${data.error}  [${diag}]`);
+        }
+        if (data.detail) {
+          throw new Error(`${data.error}  [${data.detail}]`);
+        }
         throw new Error(data.error || `HTTP ${res.status}`);
       }
 
@@ -386,6 +394,13 @@
 
     resultCard.style.display = "block";
     resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function formatDiagnostic(d) {
+    const status = d.status ?? "?";
+    const reviews = d.review_count_in_payload ?? 0;
+    const messageSuffix = d.message ? " · " + d.message : "";
+    return `p${d.page}: status=${status}, ${reviews} reviews${messageSuffix}`;
   }
 
   function topSentiment(stats) {

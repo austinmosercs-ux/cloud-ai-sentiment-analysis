@@ -1,11 +1,13 @@
 """
 AI Sentiment Analysis - AWS Lambda Function
-Routes:
-  POST /analyze  - Pull reviews for an Amazon product (via ScraperAPI)
-                   and run sentiment analysis on each with Amazon Comprehend.
 
-Required environment variable:
-  SCRAPERAPI_KEY  - ScraperAPI account key (https://www.scraperapi.com/)
+POST /analyze - Pull reviews for an Amazon product (via RapidAPI's
+                Real-Time Amazon Data) and run sentiment analysis on
+                each with Amazon Comprehend.
+
+Required environment variables:
+  RAPIDAPI_KEY          - RapidAPI account key
+  RAPIDAPI_AMAZON_HOST  - e.g. real-time-amazon-data.p.rapidapi.com
 """
 
 import json
@@ -30,13 +32,13 @@ logger.setLevel(logging.INFO)
 _config = Config(connect_timeout=5, read_timeout=25)
 comprehend = boto3.client("comprehend", config=_config)
 
-SCRAPERAPI_KEY = os.environ.get("SCRAPERAPI_KEY", "")
-SCRAPERAPI_BASE = "https://api.scraperapi.com/structured/amazon/review"
+RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
+RAPIDAPI_HOST = os.environ.get("RAPIDAPI_AMAZON_HOST", "")
 
-# ScraperAPI returns up to ~10 reviews per page; 3 pages -> up to 30, we cap at 25
+# Real-Time Amazon Data returns ~10 reviews per page; 3 pages -> up to 30, capped at 25
 PAGES_TO_FETCH = 3
 TARGET_REVIEWS = 25
-SCRAPERAPI_TIMEOUT = 20
+RAPIDAPI_TIMEOUT = 25
 
 # Amazon Comprehend DetectSentiment limit is 5000 UTF-8 bytes per document
 COMPREHEND_MAX_BYTES = 5000
@@ -74,13 +76,16 @@ def handle_analyze(event):
     try:
         review_items, product_meta = fetch_amazon_reviews(asin)
     except urllib.error.HTTPError as exc:
-        return _scraperapi_error_response(exc)
+        return _rapidapi_error_response(exc)
     except urllib.error.URLError as exc:
-        logger.error("ScraperAPI URLError: %s", exc, exc_info=True)
+        logger.error("RapidAPI URLError: %s", exc, exc_info=True)
         return response(504, {"error": "Review fetch timed out. Try again."})
 
     if not review_items:
-        return response(502, {"error": "No reviews could be retrieved for that product."})
+        return response(502, {
+            "error": "No reviews could be retrieved for that product.",
+            "diagnostics": product_meta.get("_diagnostics") or [],
+        })
 
     documents = [truncate_to_bytes(item["text"], COMPREHEND_MAX_BYTES) for item in review_items]
     sentiments = batch_detect_sentiment(documents)
@@ -121,20 +126,27 @@ def _validate_request(body):
             "error": "Could not find the product ASIN. The link should contain /dp/XXXXXXXXXX."
         })
 
-    if not SCRAPERAPI_KEY:
-        logger.error("SCRAPERAPI_KEY env var is not set on this Lambda.")
-        return None, response(500, {"error": "Server is missing the SCRAPERAPI_KEY environment variable."})
+    if not RAPIDAPI_KEY or not RAPIDAPI_HOST:
+        logger.error("RAPIDAPI_KEY or RAPIDAPI_AMAZON_HOST is not set on this Lambda.")
+        return None, response(500, {
+            "error": "Server is missing RAPIDAPI_KEY or RAPIDAPI_AMAZON_HOST environment variables."
+        })
 
     return asin, None
 
 
-def _scraperapi_error_response(exc):
-    logger.error("ScraperAPI HTTPError: %s", exc, exc_info=True)
-    if exc.code == 401:
-        return response(502, {"error": "ScraperAPI rejected the API key."})
+def _rapidapi_error_response(exc):
+    logger.error("RapidAPI HTTPError %s: %s", exc.code, exc, exc_info=True)
+    detail = ""
+    try:
+        detail = exc.read().decode("utf-8", errors="ignore")[:300]
+    except Exception:
+        pass
+    if exc.code in (401, 403):
+        return response(502, {"error": "RapidAPI rejected the API key.", "detail": detail})
     if exc.code == 429:
-        return response(502, {"error": "ScraperAPI rate limit hit. Try again shortly."})
-    return response(502, {"error": f"Review fetch failed (HTTP {exc.code})."})
+        return response(502, {"error": "RapidAPI rate limit hit. Try again shortly.", "detail": detail})
+    return response(502, {"error": f"Review fetch failed (HTTP {exc.code}).", "detail": detail})
 
 
 def _build_analyzed_reviews(review_items, documents, sentiments):
@@ -165,7 +177,7 @@ def _build_analyzed_reviews(review_items, documents, sentiments):
 
 
 # ---------------------------------------------------------------------------
-# ScraperAPI integration
+# RapidAPI integration (Real-Time Amazon Data)
 # ---------------------------------------------------------------------------
 
 def extract_asin(url):
@@ -181,21 +193,25 @@ def extract_asin(url):
 
 
 def fetch_amazon_reviews(asin):
-    """Fetch up to TARGET_REVIEWS reviews by calling ScraperAPI for several pages in parallel."""
+    """Fetch up to TARGET_REVIEWS reviews via RapidAPI, requesting pages in parallel."""
     pages = list(range(1, PAGES_TO_FETCH + 1))
     page_results = _fetch_pages_in_parallel(asin, pages)
 
     review_items = []
     product_meta = {}
+    diagnostics = []
     for page in pages:
         data = page_results.get(page)
         if not data:
+            diagnostics.append({"page": page, "fetched": False})
             continue
+        diagnostics.append(_diagnose_response(data, page))
         if not product_meta:
             product_meta = _extract_product_meta(data)
         review_items.extend(_extract_review_items(data))
         if len(review_items) >= TARGET_REVIEWS:
             break
+    product_meta["_diagnostics"] = diagnostics
     return review_items[:TARGET_REVIEWS], product_meta
 
 
@@ -208,47 +224,74 @@ def _fetch_pages_in_parallel(asin, pages):
             try:
                 page_results[page] = future.result()
             except Exception as exc:
-                logger.warning("ScraperAPI page %d failed: %s", page, exc)
+                logger.warning("RapidAPI page %d failed: %s", page, exc)
                 page_results[page] = None
     return page_results
 
 
+def _fetch_one_page(asin, page):
+    params = urllib.parse.urlencode({
+        "asin": asin,
+        "country": "US",
+        "sort_by": "TOP_REVIEWS",
+        "star_rating": "ALL",
+        "verified_purchases_only": "false",
+        "images_or_videos_only": "false",
+        "current_format_only": "false",
+        "page": str(page),
+    })
+    url = f"https://{RAPIDAPI_HOST}/product-reviews?{params}"
+    request = urllib.request.Request(url, headers={
+        "x-rapidapi-host": RAPIDAPI_HOST,
+        "x-rapidapi-key": RAPIDAPI_KEY,
+    })
+    logger.info("Fetching RapidAPI for ASIN %s page %d", asin, page)
+    with urllib.request.urlopen(request, timeout=RAPIDAPI_TIMEOUT) as resp:
+        data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+    logger.info("Page %d: status=%s, reviews=%d", page,
+                data.get("status"),
+                len((data.get("data") or {}).get("reviews") or []))
+    return data
+
+
 def _extract_product_meta(data):
+    payload = data.get("data") or {}
     return {
-        "title": (data.get("name") or "").strip(),
-        "amazon_rating": _to_float(data.get("average_rating")),
+        "title": (payload.get("product_title") or "").strip(),
+        "amazon_rating": _to_float(
+            payload.get("rating") or payload.get("product_star_rating")
+        ),
         "amazon_review_count": _to_int(
-            data.get("total_ratings") or data.get("total_reviews")
+            payload.get("total_ratings") or payload.get("total_reviews")
         ),
     }
 
 
 def _extract_review_items(data):
+    payload = data.get("data") or {}
     items = []
-    for entry in (data.get("reviews") or []):
-        text = (entry.get("review") or "").strip()
+    for entry in (payload.get("reviews") or []):
+        text = (entry.get("review_comment") or "").strip()
         if len(text) < 5:
             continue
         items.append({
             "text": text,
-            "amazonStars": _to_int(entry.get("stars")),
-            "title": (entry.get("title") or "").strip(),
+            "amazonStars": _to_int(entry.get("review_star_rating")),
+            "title": (entry.get("review_title") or "").strip(),
         })
     return items
 
 
-def _fetch_one_page(asin, page):
-    params = urllib.parse.urlencode({
-        "api_key": SCRAPERAPI_KEY,
-        "asin": asin,
-        "country": "us",
-        "tld": "com",
-        "page": str(page),
-    })
-    url = f"{SCRAPERAPI_BASE}?{params}"
-    logger.info("Fetching ScraperAPI page %d for ASIN %s", page, asin)
-    with urllib.request.urlopen(url, timeout=SCRAPERAPI_TIMEOUT) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="ignore"))
+def _diagnose_response(data, page):
+    """Cheap signals so the frontend can show what came back when 0 reviews extracted."""
+    payload = data.get("data") if isinstance(data, dict) else None
+    return {
+        "page": page,
+        "status": (data or {}).get("status"),
+        "review_count_in_payload": len((payload or {}).get("reviews") or []),
+        "has_data_field": isinstance(payload, dict),
+        "message": (data or {}).get("message"),
+    }
 
 
 # ---------------------------------------------------------------------------
