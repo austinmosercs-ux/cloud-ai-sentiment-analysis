@@ -212,6 +212,7 @@ def fetch_amazon_reviews(asin):
     page_results = _fetch_pages_in_parallel(asin, pages)
 
     review_items = []
+    seen_keys = set()
     product_meta = {}
     diagnostics = []
     for page in pages:
@@ -222,7 +223,12 @@ def fetch_amazon_reviews(asin):
         diagnostics.append(_diagnose_response(data, page))
         if not product_meta:
             product_meta = _extract_product_meta(data)
-        review_items.extend(_extract_review_items(data))
+        for item in _extract_review_items(data):
+            key = item.get("review_id") or item["text"]
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            review_items.append(item)
         if len(review_items) >= TARGET_REVIEWS:
             break
     product_meta["_diagnostics"] = diagnostics
@@ -292,6 +298,7 @@ def _extract_review_items(data):
             "text": text,
             "amazonStars": _to_int(entry.get("review_star_rating")),
             "title": (entry.get("review_title") or "").strip(),
+            "review_id": (entry.get("review_id") or "").strip(),
         })
     return items
 
