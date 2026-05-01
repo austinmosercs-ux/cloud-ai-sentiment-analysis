@@ -49,9 +49,9 @@ Content-Type: application/json
 |--------------|--------|----------|----------------------------------------------------------|
 | `productUrl` | string | Yes      | Amazon product link. Must contain `/dp/<ASIN>`, `/gp/product/<ASIN>`, or `/product-reviews/<ASIN>`. |
 
-The Lambda extracts the ASIN from the URL and ignores the rest of the path /
-query string, so links pasted directly from Amazon (with affiliate / tracking
-parameters) work fine.
+The Flask app extracts the ASIN from the URL and ignores the rest of the
+path / query string, so links pasted directly from Amazon (with affiliate /
+tracking parameters) work fine.
 
 ### Response 200 OK
 
@@ -131,7 +131,7 @@ The request was malformed.
 
 ### Response 500 Internal Server Error
 
-Lambda is missing required env vars.
+The server is missing required env vars.
 
 ```json
 { "error": "Server is missing RAPIDAPI_KEY or RAPIDAPI_AMAZON_HOST environment variables." }

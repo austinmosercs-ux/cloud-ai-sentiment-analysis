@@ -22,11 +22,11 @@ htmlcov/
 *.swp
 *.swo
 
-# Lambda deployment artifacts
-*.zip
-function.zip
-
 # Local env files (do NOT commit secrets — RapidAPI keys, etc.)
 .env
 .env.local
 .env.*.local
+sentiment.env
+
+# SSH keys (EC2 key pairs)
+*.pem
